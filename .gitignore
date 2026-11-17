@@ -1,0 +1,81 @@
+# =============================================================================
+# Agentic RAG Eval Engine — .gitignore
+# Strictly excludes secrets, envs, model weights, runtime data, and caches.
+# =============================================================================
+
+# --- Secrets & Environment ---
+.env
+.env.*
+!.env.example
+
+# --- Python Virtual Environments ---
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# --- uv ---
+.uv/
+
+# --- Type Checking ---
+.mypy_cache/
+.pyright/
+.ruff_cache/
+
+# --- Testing ---
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# --- HuggingFace Model Weights & Caches (NEVER commit) ---
+models/
+hf_cache/
+*.safetensors
+*.bin
+*.pt
+*.onnx
+*.gguf
+*.ggml
+
+# --- Runtime Data & Local Databases (NEVER commit) ---
+data/
+qdrant_storage/
+redis_data/
+postgres_data/
+langfuse_data/
+*.sqlite3
+*.db
+
+# --- Logs ---
+logs/
+*.log
+*.jsonl
+
+# --- IDE ---
+.vscode/settings.json
+.vscode/.ropeproject
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+*.ipynb
+
+# --- Docker ---
+docker-compose.override.yml
+
+# --- Benchmark Reports (generated) ---
+evals/benchmark_report.md

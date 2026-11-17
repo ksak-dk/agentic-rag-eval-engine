@@ -1,0 +1,103 @@
+services:
+  # ==========================================================================
+  # Qdrant — Vector Database (always-on)
+  # int8 scalar quantization | HNSW index | mem ≤ 350 MB
+  # ==========================================================================
+  qdrant:
+    image: qdrant/qdrant:v1.12.1
+    container_name: rag_qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"   # HTTP REST + gRPC
+      - "6334:6334"   # gRPC (optional direct access)
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__GRPC_PORT: "6334"
+      QDRANT__LOG_LEVEL: "WARN"
+    mem_limit: 350m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ==========================================================================
+  # Redis 8 Alpine — Semantic Cache + BM25 fallback store (always-on)
+  # Native RediSearch / vector module built-in in Redis 8+
+  # 256 MB LRU eviction — prevents OOM in WSL2
+  # ==========================================================================
+  redis:
+    image: redis:8-alpine
+    container_name: rag_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
+    volumes:
+      - redis_data:/data
+    mem_limit: 280m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  # ==========================================================================
+  # Langfuse — LLMOps Observability (on-demand: docker compose --profile observability up)
+  # ==========================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: rag_postgres
+    restart: unless-stopped
+    profiles: ["observability"]
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: langfuse
+      POSTGRES_DB: langfuse
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  langfuse:
+    image: langfuse/langfuse:3
+    container_name: rag_langfuse
+    restart: unless-stopped
+    profiles: ["observability"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://langfuse:langfuse@postgres:5432/langfuse
+      NEXTAUTH_SECRET: "change-me-in-production-32chars-min"
+      NEXTAUTH_URL: "http://localhost:3000"
+      LANGFUSE_INIT_ORG_ID: "local-org"
+      LANGFUSE_INIT_ORG_NAME: "Local Dev"
+      LANGFUSE_INIT_PROJECT_ID: "rag-eval"
+      LANGFUSE_INIT_PROJECT_NAME: "agentic-rag-eval-engine"
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: "pk-lf-local-dev"
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: "sk-lf-local-dev"
+      LANGFUSE_INIT_USER_EMAIL: "dev@local.dev"
+      LANGFUSE_INIT_USER_NAME: "Dev User"
+      LANGFUSE_INIT_USER_PASSWORD: "changeme123"
+      TELEMETRY_ENABLED: "false"
+    mem_limit: 512m
+
+volumes:
+  qdrant_storage:
+  redis_data:
+  postgres_data:
