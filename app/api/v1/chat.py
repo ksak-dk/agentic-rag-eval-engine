@@ -150,9 +150,9 @@ class HealthResponse(BaseModel):
         ge=0.0,
         description="Currently allocated CUDA memory in megabytes.",
     )
-    components: dict[str, bool] = Field(
+    components: dict[str, bool | str] = Field(
         default_factory=dict,
-        description="Readiness status of retriever, router, cache, and checkpointer.",
+        description="Readiness status and runtime mode of retriever, router, cache, workflow, and checkpointer.",
     )
 
 
@@ -172,6 +172,7 @@ class ChatServiceDependencies:
     checkpointer: Any | None = None
     workflow: Any | None = None
     checkpoint_db: Path | None = None
+    container: Any | None = None
 
 
 def _try_get_settings() -> Settings | None:
@@ -200,8 +201,11 @@ def get_llm_router(request: Request) -> Any:
 
 
 def get_semantic_cache(request: Request) -> Any:
-    """Resolve the optional Redis ``SemanticCache`` from ``app.state``."""
-    return getattr(request.app.state, "cache", None)
+    """Resolve the optional ``SemanticCache`` from ``app.state``."""
+    cache = getattr(request.app.state, "cache", None)
+    if cache is None:
+        return getattr(request.app.state, "semantic_cache", None)
+    return cache
 
 
 def get_checkpointer(request: Request) -> Any:
@@ -220,6 +224,11 @@ def get_checkpoint_db(request: Request) -> Path | None:
     return Path(raw) if raw is not None else None
 
 
+def get_container(request: Request) -> Any:
+    """Resolve the optional ``ServiceContainer`` from ``app.state``."""
+    return getattr(request.app.state, "container", None)
+
+
 def get_chat_dependencies(
     settings: Settings | None = Depends(get_api_settings),
     retriever: Any = Depends(get_retriever),
@@ -228,6 +237,7 @@ def get_chat_dependencies(
     checkpointer: Any = Depends(get_checkpointer),
     workflow: Any = Depends(get_workflow),
     checkpoint_db: Path | None = Depends(get_checkpoint_db),
+    container: Any = Depends(get_container),
 ) -> ChatServiceDependencies:
     """Aggregate service dependencies so tests may override individually or together."""
     return ChatServiceDependencies(
@@ -238,6 +248,7 @@ def get_chat_dependencies(
         checkpointer=checkpointer,
         workflow=workflow,
         checkpoint_db=checkpoint_db,
+        container=container,
     )
 
 
@@ -547,15 +558,56 @@ async def health_check(
     default_version = _resolve_pipeline_version(None, deps.settings)
     cuda_available = _is_cuda_available()
     vram_mb = sample_cuda_vram_mb()
-    components: dict[str, bool] = {
-        "retriever": deps.retriever is not None,
-        "router": deps.router is not None,
-        "cache": deps.cache is not None,
-        "checkpointer": deps.checkpointer is not None,
-    }
-    overall_status: Literal["ok", "degraded"] = (
-        "ok" if components["retriever"] and components["router"] else "degraded"
+
+    container = deps.container
+    if container is not None:
+        mode = str(getattr(container, "mode", "demo"))
+        status_map = getattr(container, "component_status", {}) or {}
+        components: dict[str, bool | str] = {
+            "runtime_mode": str(status_map.get("runtime_mode", mode)),
+            "retriever": str(
+                status_map.get(
+                    "retriever",
+                    f"ready ({mode})" if deps.retriever is not None else "unavailable",
+                )
+            ),
+            "router": str(
+                status_map.get(
+                    "router",
+                    f"ready ({mode})" if deps.router is not None else "unavailable",
+                )
+            ),
+            "semantic_cache": str(
+                status_map.get(
+                    "semantic_cache",
+                    f"ready ({mode})" if deps.cache is not None else "unavailable",
+                )
+            ),
+            "workflow": str(
+                status_map.get(
+                    "workflow",
+                    f"ready ({mode})" if deps.workflow is not None else "unavailable",
+                )
+            ),
+            "checkpointer": str(
+                status_map.get(
+                    "checkpointer",
+                    f"ready ({mode})" if deps.checkpointer is not None else "unavailable",
+                )
+            ),
+        }
+    else:
+        components = {
+            "retriever": deps.retriever is not None,
+            "router": deps.router is not None,
+            "cache": deps.cache is not None,
+            "checkpointer": deps.checkpointer is not None,
+        }
+
+    core_ready = (deps.retriever is not None and deps.router is not None) or (
+        deps.workflow is not None
     )
+    overall_status: Literal["ok", "degraded"] = "ok" if core_ready else "degraded"
     return HealthResponse(
         status=overall_status,
         pipeline_version=default_version,

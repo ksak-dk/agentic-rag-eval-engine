@@ -50,7 +50,9 @@ def _try_get_settings() -> Settings | None:
         return None
 
 
-def _resolve_checkpoint_path(db_path: str | Path | None) -> Path:
+def _resolve_checkpoint_path(db_path: str | Path | None) -> str:
+    if db_path is not None and str(db_path) == ":memory:":
+        return ":memory:"
     if db_path is not None:
         resolved = Path(db_path)
     else:
@@ -59,7 +61,7 @@ def _resolve_checkpoint_path(db_path: str | Path | None) -> Path:
             settings.langgraph_checkpoint_db if settings is not None else DEFAULT_CHECKPOINT_DB
         )
     resolved.parent.mkdir(parents=True, exist_ok=True)
-    return resolved
+    return str(resolved)
 
 
 # ---------------------------------------------------------------------------
@@ -212,10 +214,17 @@ class AgenticRAGWorkflow:
         *,
         db_path: str | Path | None = None,
         max_retries: int | None = None,
+        checkpointer: AsyncSqliteSaver | None = None,
     ) -> None:
         self._deps = deps
         self._db_path = db_path
         self._max_retries = deps.max_retries if max_retries is None else int(max_retries)
+        self._checkpointer = checkpointer
+        self._compiled: CompiledStateGraph | None = (
+            compile_workflow(deps, checkpointer=checkpointer, max_retries=self._max_retries)
+            if checkpointer is not None
+            else None
+        )
 
     async def ainvoke(
         self,
@@ -233,6 +242,11 @@ class AgenticRAGWorkflow:
         )
         config: dict[str, Any] = {"configurable": {"thread_id": resolved_session}}
 
+        if self._compiled is not None:
+            async with request_metrics_context(session_id=resolved_session):
+                result: RAGGraphState = await self._compiled.ainvoke(initial_state, config=config)
+                return result
+
         async with (
             request_metrics_context(session_id=resolved_session),
             create_workflow_app(
@@ -241,12 +255,14 @@ class AgenticRAGWorkflow:
                 max_retries=self._max_retries,
             ) as app,
         ):
-            result: RAGGraphState = await app.ainvoke(initial_state, config=config)
+            result = await app.ainvoke(initial_state, config=config)
             return result
 
     async def aget_state(self, session_id: str) -> Any:
         """Load the latest persisted checkpoint snapshot for ``session_id``."""
         config: dict[str, Any] = {"configurable": {"thread_id": session_id}}
+        if self._compiled is not None:
+            return await self._compiled.aget_state(config)
         async with create_workflow_app(
             self._deps,
             db_path=self._db_path,

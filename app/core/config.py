@@ -12,9 +12,12 @@ from __future__ import annotations
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+RuntimeModeSetting = Literal["auto", "live", "demo", "test"]
 
 
 class PipelineVersion(StrEnum):
@@ -55,8 +58,18 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     # Cloud LLM API Keys
     # -------------------------------------------------------------------------
-    groq_api_key: str = Field(..., description="Groq API key for fast-route LLM calls.")
-    google_api_key: str = Field(..., description="Google AI Studio key for strong-route LLM calls.")
+    groq_api_key: str = Field(
+        default="",
+        description="Groq API key for fast-route LLM calls.",
+    )
+    google_api_key: str = Field(
+        default="",
+        description="Google AI Studio key for strong-route LLM calls.",
+    )
+    gemini_api_key: str = Field(
+        default="",
+        description="Optional alias for Google AI Studio key (GEMINI_API_KEY).",
+    )
 
     # -------------------------------------------------------------------------
     # Langfuse (optional observability — requires profile: observability)
@@ -81,11 +94,26 @@ class Settings(BaseSettings):
     redis_url: str = Field(default="redis://localhost:6379", description="Redis connection URL.")
 
     # -------------------------------------------------------------------------
-    # Pipeline Control
+    # Pipeline & Runtime Container Control
     # -------------------------------------------------------------------------
     pipeline_version: PipelineVersion = Field(
         default=PipelineVersion.V3,
         description="Active pipeline variant: v1 | v2 | v3.",
+    )
+
+    runtime_mode: RuntimeModeSetting = Field(
+        default="auto",
+        description="Service container runtime mode: auto | live | demo | test.",
+    )
+
+    auto_bootstrap_container: bool = Field(
+        default=True,
+        description="When True, FastAPI lifespan auto-bootstraps ServiceContainer.",
+    )
+
+    demo_corpus_paths: list[str] = Field(
+        default_factory=lambda: ["README.md", "GEMINI.md", "evals/benchmark_report.md"],
+        description="Markdown document paths indexed into memory in demo/test mode.",
     )
 
     mock_llm_stream: bool = Field(
@@ -187,10 +215,23 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     # Validators
     # -------------------------------------------------------------------------
+    @field_validator("runtime_mode", mode="before")
+    @classmethod
+    def normalize_runtime_mode(cls, v: object) -> object:
+        if isinstance(v, str):
+            return v.strip().lower()
+        return v
+
     @field_validator("langgraph_checkpoint_db", mode="before")
     @classmethod
     def coerce_checkpoint_path(cls, v: str | Path) -> Path:
         return Path(v)
+
+    @model_validator(mode="after")
+    def sync_gemini_api_key_alias(self) -> Settings:
+        if not self.google_api_key.strip() and self.gemini_api_key.strip():
+            self.google_api_key = self.gemini_api_key.strip()
+        return self
 
     @model_validator(mode="after")
     def validate_top_n_gt_top_k(self) -> Settings:

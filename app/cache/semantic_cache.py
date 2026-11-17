@@ -25,9 +25,9 @@ import math
 import re
 import struct
 import time
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from enum import StrEnum
-from typing import Any
+from typing import Any, TypeVar
 
 import structlog
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -52,6 +52,7 @@ DEFAULT_KEY_PREFIX: str = "rag:cache"
 DEFAULT_NAMESPACE: str = "v3"
 
 _TAG_SPECIAL_RE: re.Pattern[str] = re.compile(r"([,.<>{}\[\]\"':;!@#$%^&*()\-+=~|/\\\s])")
+_T = TypeVar("_T")
 
 
 class VectorIndexAlgorithm(StrEnum):
@@ -597,6 +598,244 @@ RedisSemanticCache = SemanticCache
 
 
 # ---------------------------------------------------------------------------
+# SingleFlight & In-Memory Vector Semantic Cache (Demo / Redis Fallback)
+# ---------------------------------------------------------------------------
+
+
+class SingleFlight:
+    """Deduplicates concurrent async work sharing the same logical key."""
+
+    def __init__(self) -> None:
+        self._guard = asyncio.Lock()
+        self._inflight: dict[str, asyncio.Future[Any]] = {}
+
+    async def do(self, key: str, fn: Callable[[], Awaitable[_T]]) -> _T:
+        """Execute ``fn()`` once for ``key`` among concurrent callers."""
+        async with self._guard:
+            existing = self._inflight.get(key)
+            if existing is not None:
+                return await asyncio.shield(existing)  # type: ignore[no-any-return]
+            loop = asyncio.get_running_loop()
+            future: asyncio.Future[_T] = loop.create_future()
+            self._inflight[key] = future
+            is_leader = True
+
+        if not is_leader:  # pragma: no cover - defensive clarity
+            return await asyncio.shield(future)
+
+        try:
+            result = await fn()
+            if not future.done():
+                future.set_result(result)
+            return result
+        except BaseException as exc:
+            if not future.done():
+                future.set_exception(exc)
+            raise
+        finally:
+            async with self._guard:
+                if self._inflight.get(key) is future:
+                    self._inflight.pop(key, None)
+
+
+class _HashingTextEmbedder:
+    """Zero-GPU deterministic 256-dim L2-normalized hashed n-gram embedder."""
+
+    def __init__(self, dim: int = 256) -> None:
+        self._dim = dim
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        vectors: list[list[float]] = []
+        for text in texts:
+            vec = [0.0] * self._dim
+            cleaned = re.sub(r"\s+", " ", text.strip().lower())
+            if not cleaned:
+                vectors.append(vec)
+                continue
+
+            words = re.findall(r"[a-z0-9_]+|[\u4e00-\u9fff]", cleaned)
+            tokens: list[str] = list(words)
+            for word in words:
+                if len(word) >= 3:
+                    tokens.extend(word[i : i + 3] for i in range(len(word) - 2))
+            if not tokens:
+                tokens = [cleaned]
+
+            for token in tokens:
+                digest = hashlib.blake2b(token.encode("utf-8"), digest_size=8).digest()
+                idx = int.from_bytes(digest[:4], "little") % self._dim
+                sign = 1.0 if (digest[4] & 1) == 0 else -1.0
+                vec[idx] += sign
+
+            norm = math.sqrt(sum(v * v for v in vec))
+            if norm > 0.0:
+                vec = [v / norm for v in vec]
+            vectors.append(vec)
+        return vectors
+
+    def get_vram_usage_mb(self) -> float:
+        return 0.0
+
+
+class InMemorySemanticCache:
+    """In-memory vector semantic cache with TTL expiry and SingleFlight protection.
+
+    Used in ``demo`` / ``test`` modes and as an automatic fail-open fallback
+    when Redis 8 is unreachable in ``live`` mode.
+    """
+
+    def __init__(
+        self,
+        *,
+        embedder: DenseEmbedder | None = None,
+        settings: Settings | None = None,
+        similarity_threshold: float | None = None,
+        ttl_seconds: int | None = None,
+        default_namespace: str = DEFAULT_NAMESPACE,
+    ) -> None:
+        resolved_settings = settings if settings is not None else _try_get_settings()
+        if similarity_threshold is not None:
+            resolved_threshold = float(similarity_threshold)
+        elif resolved_settings is not None:
+            resolved_threshold = float(resolved_settings.cache_similarity_threshold)
+        else:
+            resolved_threshold = DEFAULT_SIMILARITY_THRESHOLD
+
+        if ttl_seconds is not None:
+            resolved_ttl = int(ttl_seconds)
+        elif resolved_settings is not None:
+            resolved_ttl = int(resolved_settings.cache_ttl_seconds)
+        else:
+            resolved_ttl = DEFAULT_TTL_SECONDS
+
+        if not 0.0 <= resolved_threshold <= 1.0:
+            raise ValueError(
+                f"similarity_threshold must be within [0.0, 1.0], got {resolved_threshold}."
+            )
+        if resolved_ttl <= 0:
+            raise ValueError(f"ttl_seconds must be positive, got {resolved_ttl}.")
+
+        self._embedder: DenseEmbedder = embedder or _HashingTextEmbedder()
+        self._similarity_threshold = resolved_threshold
+        self._ttl_seconds = resolved_ttl
+        self._default_namespace = default_namespace
+        self._entries: dict[tuple[str, str], tuple[list[float], CachedResponse, float]] = {}
+        self._lock = asyncio.Lock()
+        self.singleflight = SingleFlight()
+
+    @property
+    def similarity_threshold(self) -> float:
+        return self._similarity_threshold
+
+    @property
+    def ttl_seconds(self) -> int:
+        return self._ttl_seconds
+
+    def _purge_expired_locked(self, now: float) -> None:
+        expired = [k for k, (_, _, expires_at) in self._entries.items() if expires_at <= now]
+        for key in expired:
+            self._entries.pop(key, None)
+
+    async def get(
+        self,
+        query: str,
+        *,
+        namespace: str | None = None,
+        threshold: float | None = None,
+    ) -> CachedResponse | None:
+        """Look up the best-matching cached response above cosine threshold."""
+        cleaned_query = query.strip()
+        if not cleaned_query:
+            update_request_metrics(cache_hit=False)
+            return None
+
+        active_ns = namespace or self._default_namespace
+        active_threshold = self._similarity_threshold if threshold is None else float(threshold)
+        query_vec = self._embedder.embed([cleaned_query])[0]
+
+        async def _lookup() -> CachedResponse | None:
+            now = time.monotonic()
+            async with self._lock:
+                self._purge_expired_locked(now)
+                best_sim = -1.0
+                best_entry: CachedResponse | None = None
+                for (entry_ns, _), (entry_vec, entry, _) in self._entries.items():
+                    if entry_ns != active_ns:
+                        continue
+                    sim = cosine_similarity(query_vec, entry_vec)
+                    if sim > best_sim:
+                        best_sim = sim
+                        best_entry = entry
+
+            if best_entry is None or best_sim < active_threshold:
+                return None
+            return best_entry.model_copy(update={"similarity": best_sim})
+
+        flight_key = f"get:{active_ns}:{cleaned_query.lower()}"
+        hit = await self.singleflight.do(flight_key, _lookup)
+        if hit is None:
+            update_request_metrics(cache_hit=False)
+            return None
+
+        update_request_metrics(cache_hit=True)
+        return hit
+
+    async def set(
+        self,
+        query: str,
+        response: str,
+        *,
+        namespace: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        ttl_seconds: int | None = None,
+    ) -> str | None:
+        """Store a query vector and response with TTL expiration."""
+        cleaned_query = query.strip()
+        if not cleaned_query:
+            return None
+
+        active_ns = namespace or self._default_namespace
+        active_ttl = self._ttl_seconds if ttl_seconds is None else int(ttl_seconds)
+        query_vec = self._embedder.embed([cleaned_query])[0]
+        digest = hashlib.sha256(cleaned_query.encode("utf-8")).hexdigest()[:24]
+        cache_key = f"{DEFAULT_KEY_PREFIX}:{active_ns}:{digest}"
+
+        entry = CachedResponse(
+            query=cleaned_query,
+            response=response,
+            namespace=active_ns,
+            similarity=1.0,
+            metadata=dict(metadata or {}),
+            created_at=round(time.time(), 3),
+        )
+        expires_at = time.monotonic() + max(1, active_ttl)
+
+        async with self._lock:
+            self._purge_expired_locked(time.monotonic())
+            self._entries[(active_ns, cleaned_query)] = (query_vec, entry, expires_at)
+
+        return cache_key
+
+    async def invalidate_namespace(self, namespace: str | None = None) -> int:
+        """Remove all cached entries belonging to ``namespace``."""
+        active_ns = namespace or self._default_namespace
+        async with self._lock:
+            keys = [k for k in self._entries if k[0] == active_ns]
+            for k in keys:
+                self._entries.pop(k, None)
+            return len(keys)
+
+    async def aclose(self) -> None:
+        """Clear in-memory entries on shutdown."""
+        async with self._lock:
+            self._entries.clear()
+
+    lookup = get
+    put = set
+    store = set
+
+
+# ---------------------------------------------------------------------------
 # Public re-exports
 # ---------------------------------------------------------------------------
 
@@ -609,8 +848,10 @@ __all__: Sequence[str] = [
     "DEFAULT_TTL_SECONDS",
     "CacheEntry",
     "CachedResponse",
+    "InMemorySemanticCache",
     "RedisSemanticCache",
     "SemanticCache",
+    "SingleFlight",
     "VectorIndexAlgorithm",
     "cosine_similarity",
     "pack_float32_vector",

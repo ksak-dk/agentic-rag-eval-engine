@@ -39,15 +39,9 @@ import structlog
 from fastapi import FastAPI
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.cache.semantic_cache import CachedResponse
 from app.core.config import LogLevel, Settings
 from app.core.config import PipelineVersion as ConfigPipelineVersion
-from app.core.router import LLMGenerationResult, RouteDecision, RouteTier, TaskType
-from app.graph.nodes import DocumentGradeOutput, HallucinationGradeOutput
-from app.graph.workflow import open_async_sqlite_saver
-from app.main import create_app
-from app.retrieval.chunker import ChunkMetadata
-from app.retrieval.hybrid_store import RetrievedChunk
+from app.main import create_app, lifespan
 
 logger = structlog.get_logger(__name__)
 
@@ -86,7 +80,7 @@ class HealthSnapshot(BaseModel):
     pipeline_version: str
     cuda_available: bool = False
     vram_allocated_mb: float = 0.0
-    components: dict[str, bool] = Field(default_factory=dict)
+    components: dict[str, bool | str] = Field(default_factory=dict)
 
 
 class DemoRunResult(BaseModel):
@@ -143,239 +137,18 @@ def default_demo_scenarios() -> list[DemoScenario]:
 
 
 # ---------------------------------------------------------------------------
-# In-Memory ASGI Demo Stubs (Zero-GPU / Zero-API-Key Mode)
+# In-Memory ASGI Demo App Builder (Powered by ServiceContainer demo mode)
 # ---------------------------------------------------------------------------
-
-
-class _DemoRetriever:
-    """Async retriever stub returning realistic domain chunks per pipeline version."""
-
-    _CHUNKS: tuple[RetrievedChunk, ...] = (
-        RetrievedChunk(
-            text=(
-                "Qdrant stores 1024-dimensional BAAI/bge-m3 dense vectors with INT8 scalar "
-                "quantization (always_ram=True) and pairs them with BM25 sparse vectors via "
-                "server-side Fusion.RRF before FP16 BAAI/bge-reranker-v2-m3 top-5 scoring."
-            ),
-            metadata=ChunkMetadata(
-                doc_id="doc-retrieval",
-                source="docs/retrieval.md",
-                section_path=["Architecture", "Hybrid Retrieval & Rerank"],
-                chunk_index=0,
-            ),
-            score=0.96,
-            rank=0,
-        ),
-        RetrievedChunk(
-            text=(
-                "LangGraph StateGraph executes Redis 8 vector semantic cache lookup "
-                "(cosine >= 0.92), fast-vs-strong routing, bounded query rewriting "
-                "(max_retries=2), and hallucination verification persisted in AsyncSqliteSaver."
-            ),
-            metadata=ChunkMetadata(
-                doc_id="doc-langgraph",
-                source="docs/orchestration.md",
-                section_path=["Architecture", "Self-Correcting StateGraph"],
-                chunk_index=0,
-            ),
-            score=0.94,
-            rank=1,
-        ),
-        RetrievedChunk(
-            text=(
-                "RTX 3060 6 GB VRAM budget hosts only FP16 BAAI/bge-m3 (~1.1 GB) and "
-                "BAAI/bge-reranker-v2-m3 (~1.1 GB) totaling ~2.3 GB, with zero local LLMs."
-            ),
-            metadata=ChunkMetadata(
-                doc_id="doc-hardware",
-                source="GEMINI.md",
-                section_path=["Hardware Architecture", "VRAM Allocation"],
-                chunk_index=0,
-            ),
-            score=0.89,
-            rank=2,
-        ),
-    )
-
-    async def search(
-        self,
-        query: str,
-        pipeline_version: str = "v3",
-        top_k: int = 5,
-        top_n: int = 20,
-    ) -> list[RetrievedChunk]:
-        _ = (query, top_n)
-        if pipeline_version == "v1":
-            await asyncio.sleep(0.015)
-            return [self._CHUNKS[0]]
-        await asyncio.sleep(0.025)
-        return list(self._CHUNKS[:top_k])
-
-
-class _DemoSemanticCache:
-    """In-memory async cache simulating Redis 8 RediSearch cosine >= 0.92 lookup."""
-
-    def __init__(self, threshold: float = 0.92) -> None:
-        self._threshold = threshold
-        self._entries: dict[tuple[str, str], CachedResponse] = {}
-
-    async def get(self, query: str, *, namespace: str = "v3") -> CachedResponse | None:
-        await asyncio.sleep(0.002)
-        cleaned = query.strip()
-        hit = self._entries.get((namespace, cleaned))
-        if hit is not None and hit.similarity >= self._threshold:
-            return hit
-        return None
-
-    async def set(
-        self,
-        query: str,
-        response: str,
-        *,
-        namespace: str = "v3",
-        metadata: dict[str, Any] | None = None,
-    ) -> str:
-        await asyncio.sleep(0.002)
-        cleaned = query.strip()
-        self._entries[(namespace, cleaned)] = CachedResponse(
-            query=cleaned,
-            response=response,
-            namespace=namespace,
-            similarity=0.985,
-            metadata=dict(metadata or {}),
-            created_at=time.time(),
-        )
-        return f"rag:cache:{namespace}:demo"
-
-
-class _DemoRouter:
-    """Async dual-tier LLM router stub streaming realistic cited responses."""
-
-    def select_route(
-        self,
-        *,
-        task_type: TaskType | str | None = None,
-        query: str | None = None,
-        retry_count: int = 0,
-        force_tier: RouteTier | str | None = None,
-    ) -> RouteDecision:
-        _ = (task_type, query)
-        if force_tier == RouteTier.STRONG or retry_count > 0:
-            return RouteDecision(
-                tier=RouteTier.STRONG,
-                model_name="gemini-2.5-flash",
-                fallback_model_name=None,
-                reason="Demo strong route for grounded synthesis",
-            )
-        return RouteDecision(
-            tier=RouteTier.FAST,
-            model_name="llama-3.1-8b-instant",
-            fallback_model_name="gemini-2.5-flash-lite",
-            reason="Demo fast route for routing and grading",
-        )
-
-    @staticmethod
-    def _answer_for_messages(messages: Any, tier: RouteTier) -> str:
-        user_msg = ""
-        if isinstance(messages, Sequence) and not isinstance(messages, (str, bytes)):
-            for item in messages:
-                if isinstance(item, tuple) and len(item) >= 2 and item[0] == "user":
-                    user_msg = str(item[1])
-                    break
-        question_line = user_msg.split("\n\nContext:", 1)[0] if user_msg else str(messages)
-
-        if "infinite loops" in question_line or "v3" in question_line:
-            return (
-                "The v3 LangGraph StateGraph prevents infinite loops by capping query "
-                "rewrites at max_retries=2 before falling back safely, while Redis 8 "
-                "vector semantic caching (cosine >= 0.92) short-circuits repeat queries "
-                "[doc-langgraph] within the 2.3 GB RTX 3060 VRAM budget [doc-hardware]."
-            )
-        if "BM25" in question_line or tier == RouteTier.STRONG:
-            return (
-                "Hybrid v2 retrieval prefetches 1024-dim INT8 dense vectors from "
-                "BAAI/bge-m3 alongside BM25 sparse vectors, merges them with server-side "
-                "Fusion.RRF, and reranks to top-k using FP16 BAAI/bge-reranker-v2-m3 "
-                "[doc-retrieval]."
-            )
-        return (
-            "The v1 baseline chunks documents at fixed lengths and performs Qdrant "
-            "INT8 dense-only nearest-neighbor retrieval before single-step generation "
-            "[doc-retrieval]."
-        )
-
-    async def ainvoke(
-        self,
-        messages: Any,
-        *,
-        task_type: TaskType | str | None = None,
-        force_tier: RouteTier | str | None = None,
-        retry_count: int = 0,
-        temperature: float = 0.0,
-    ) -> LLMGenerationResult:
-        _ = (task_type, retry_count, temperature)
-        tier = force_tier if isinstance(force_tier, RouteTier) else RouteTier.STRONG
-        delay = 0.025 if tier == RouteTier.FAST else 0.04
-        await asyncio.sleep(delay)
-        content = self._answer_for_messages(messages, tier)
-        return LLMGenerationResult(
-            content=content,
-            route_tier=tier,
-            model_name="llama-3.1-8b-instant" if tier == RouteTier.FAST else "gemini-2.5-flash",
-            mocked=True,
-            ttft_ms=round(delay * 1000.0, 2),
-            latency_ms=round(delay * 1000.0, 2),
-            prompt_tokens=118,
-            completion_tokens=42,
-        )
-
-    async def astream(
-        self,
-        messages: Any,
-        *,
-        task_type: TaskType | str | None = None,
-        force_tier: RouteTier | str | None = None,
-        retry_count: int = 0,
-        temperature: float = 0.0,
-    ) -> AsyncIterator[str]:
-        _ = (task_type, retry_count, temperature)
-        tier = force_tier if isinstance(force_tier, RouteTier) else RouteTier.STRONG
-        await asyncio.sleep(0.015 if tier == RouteTier.FAST else 0.025)
-        content = self._answer_for_messages(messages, tier)
-        words = content.split(" ")
-        for idx, word in enumerate(words):
-            suffix = " " if idx < len(words) - 1 else ""
-            yield f"{word}{suffix}"
-            await asyncio.sleep(0.008)
-
-    async def ainvoke_structured(
-        self,
-        schema: type[Any],
-        messages: Any,
-        *,
-        task_type: TaskType | str | None = None,
-        force_tier: RouteTier | str | None = None,
-        retry_count: int = 0,
-        temperature: float = 0.0,
-    ) -> Any:
-        _ = (messages, task_type, force_tier, retry_count, temperature)
-        await asyncio.sleep(0.005)
-        if schema is DocumentGradeOutput:
-            return DocumentGradeOutput(relevant=True, reason="Verified relevant chunk")
-        if schema is HallucinationGradeOutput:
-            return HallucinationGradeOutput(grounded=True, reason="Grounded in context")
-        return schema.model_validate({})
 
 
 def build_demo_asgi_app(
     *,
     checkpoint_db: Path,
-    checkpointer: Any,
+    checkpointer: Any = None,
 ) -> FastAPI:
-    """Create a self-contained offline FastAPI app for zero-dependency ASGI demos."""
+    """Create a self-contained offline FastAPI app powered by ``ServiceContainer`` demo mode."""
     settings = Settings(
-        groq_api_key="demo-groq-key",
-        google_api_key="demo-google-key",
+        runtime_mode="demo",
         pipeline_version=ConfigPipelineVersion.V3,
         mock_llm_stream=True,
         langgraph_checkpoint_db=checkpoint_db,
@@ -383,12 +156,8 @@ def build_demo_asgi_app(
     )
     return create_app(
         settings=settings,
-        retriever=_DemoRetriever(),
-        router=_DemoRouter(),
-        cache=_DemoSemanticCache(),
         checkpointer=checkpointer,
         checkpoint_db=checkpoint_db,
-        testing=True,
     )
 
 
@@ -660,11 +429,8 @@ async def _open_demo_client(mode: DemoMode, url: str) -> AsyncIterator[httpx.Asy
     if mode == "asgi":
         with tempfile.TemporaryDirectory() as tmp_dir:
             db_path = Path(tmp_dir) / "demo_checkpoints.sqlite3"
-            async with open_async_sqlite_saver(db_path) as checkpointer:
-                demo_app = build_demo_asgi_app(
-                    checkpoint_db=db_path,
-                    checkpointer=checkpointer,
-                )
+            demo_app = build_demo_asgi_app(checkpoint_db=db_path)
+            async with lifespan(demo_app):
                 transport = httpx.ASGITransport(app=demo_app)
                 async with httpx.AsyncClient(
                     transport=transport,

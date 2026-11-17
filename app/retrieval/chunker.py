@@ -492,6 +492,9 @@ def make_chunker(pipeline_version: str = "v3") -> DocumentChunker:
     )
 
 
+MarkdownHeaderChunker = DocumentChunker
+
+
 # ---------------------------------------------------------------------------
 # Public re-exports
 # ---------------------------------------------------------------------------
@@ -502,5 +505,6 @@ __all__: Sequence[str] = [
     "ChunkerConfig",
     "DocumentChunk",
     "DocumentChunker",
+    "MarkdownHeaderChunker",
     "make_chunker",
 ]
