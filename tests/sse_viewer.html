@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agentic RAG Dual-Channel SSE Viewer</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --panel-alt: #0b1220;
+      --border: #334155;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-strong: #0284c7;
+      --ok: #22c55e;
+      --err: #ef4444;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 24px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 1180px;
+      margin: 0 auto;
+      display: grid;
+      gap: 18px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.25rem;
+      letter-spacing: 0.01em;
+    }
+
+    .status-pill {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+
+    .status-pill.running {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .status-pill.done {
+      color: var(--ok);
+      border-color: var(--ok);
+    }
+
+    .status-pill.error {
+      color: var(--err);
+      border-color: var(--err);
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+    }
+
+    .card h2 {
+      margin: 0 0 12px 0;
+      font-size: 0.95rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--accent);
+    }
+
+    .controls-grid {
+      display: grid;
+      grid-template-columns: 2fr 1.2fr 0.8fr auto;
+      gap: 12px;
+      align-items: end;
+    }
+
+    @media (max-width: 840px) {
+      .controls-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    label {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    input[type="text"],
+    select,
+    textarea {
+      width: 100%;
+      background: var(--panel-alt);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 9px 11px;
+      font-family: var(--sans);
+      font-size: 0.92rem;
+    }
+
+    input[type="text"],
+    select {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 74px;
+    }
+
+    .checkbox-field {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding-bottom: 8px;
+      font-size: 0.88rem;
+      color: var(--text);
+    }
+
+    .query-row {
+      margin-top: 12px;
+      display: flex;
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    button {
+      background: var(--accent-strong);
+      color: #ffffff;
+      border: none;
+      border-radius: 6px;
+      padding: 10px 20px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    button:hover:not(:disabled) {
+      background: var(--accent);
+      color: #0f172a;
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .channels-grid {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      gap: 18px;
+    }
+
+    @media (max-width: 960px) {
+      .channels-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .token-output {
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      min-height: 220px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 0.96rem;
+    }
+
+    .error-banner {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--err);
+      background: rgba(239, 68, 68, 0.12);
+      color: #fecaca;
+      font-family: var(--mono);
+      font-size: 0.84rem;
+      display: none;
+    }
+
+    .citations-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .citation-card {
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+
+    .citation-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+
+    .citation-meta {
+      font-family: var(--mono);
+      font-size: 0.76rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .citation-snippet {
+      font-size: 0.86rem;
+      color: var(--text);
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+      gap: 10px;
+    }
+
+    .metric-tile {
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+
+    .metric-key {
+      font-family: var(--mono);
+      font-size: 0.74rem;
+      color: var(--muted);
+    }
+
+    .metric-val {
+      font-family: var(--mono);
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-top: 2px;
+      color: var(--text);
+      word-break: break-all;
+    }
+
+    .placeholder {
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Agentic RAG Dual-Channel SSE Viewer</h1>
+      <span id="statusPill" class="status-pill">idle</span>
+    </header>
+
+    <section class="card">
+      <h2>Request Controls</h2>
+      <div class="controls-grid">
+        <div class="field">
+          <label for="endpointInput">Endpoint URL</label>
+          <input id="endpointInput" type="text" value="http://localhost:8000/api/v1/chat" />
+        </div>
+        <div class="field">
+          <label for="sessionInput">Session ID (optional)</label>
+          <input id="sessionInput" type="text" placeholder="auto-generated if blank" />
+        </div>
+        <div class="field">
+          <label for="pipelineSelect">Pipeline Version</label>
+          <select id="pipelineSelect">
+            <option value="v3" selected>v3 (Agentic LangGraph)</option>
+            <option value="v2">v2 (Hybrid + Rerank)</option>
+            <option value="v1">v1 (Dense Only)</option>
+          </select>
+        </div>
+        <label class="checkbox-field">
+          <input id="streamCheckbox" type="checkbox" checked />
+          <span>Stream SSE</span>
+        </label>
+      </div>
+
+      <div class="query-row">
+        <textarea id="queryInput" placeholder="Ask a question against the RAG pipeline..."></textarea>
+        <button id="sendBtn" type="button">Send</button>
+      </div>
+      <div id="errorBanner" class="error-banner"></div>
+    </section>
+
+    <div class="channels-grid">
+      <section class="card">
+        <h2>Token Answer Area</h2>
+        <div id="tokenOutput" class="token-output placeholder">Waiting for query...</div>
+      </section>
+
+      <section class="card">
+        <h2>Citations Cards</h2>
+        <div id="citationsList" class="citations-list">
+          <div class="placeholder">No citations received yet.</div>
+        </div>
+      </section>
+    </div>
+
+    <section class="card">
+      <h2>Metrics Telemetry Panel</h2>
+      <div id="metricsGrid" class="metrics-grid">
+        <div class="placeholder">No telemetry received yet.</div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const endpointInput = document.getElementById("endpointInput");
+    const sessionInput = document.getElementById("sessionInput");
+    const pipelineSelect = document.getElementById("pipelineSelect");
+    const streamCheckbox = document.getElementById("streamCheckbox");
+    const queryInput = document.getElementById("queryInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const statusPill = document.getElementById("statusPill");
+    const errorBanner = document.getElementById("errorBanner");
+    const tokenOutput = document.getElementById("tokenOutput");
+    const citationsList = document.getElementById("citationsList");
+    const metricsGrid = document.getElementById("metricsGrid");
+
+    function setStatus(text, kind = "") {
+      statusPill.textContent = text;
+      statusPill.className = kind ? `status-pill ${kind}` : "status-pill";
+    }
+
+    function showError(message) {
+      errorBanner.textContent = message;
+      errorBanner.style.display = "block";
+    }
+
+    function clearOutputs() {
+      errorBanner.textContent = "";
+      errorBanner.style.display = "none";
+      tokenOutput.textContent = "";
+      tokenOutput.classList.remove("placeholder");
+      citationsList.replaceChildren();
+      metricsGrid.replaceChildren();
+    }
+
+    function renderCitations(citations) {
+      citationsList.replaceChildren();
+      if (!Array.isArray(citations) || citations.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "placeholder";
+        empty.textContent = "No citations returned.";
+        citationsList.appendChild(empty);
+        return;
+      }
+
+      for (const item of citations) {
+        const card = document.createElement("div");
+        card.className = "citation-card";
+
+        const header = document.createElement("div");
+        header.className = "citation-header";
+        const docSpan = document.createElement("span");
+        docSpan.textContent = `[${item.doc_id || "unknown"}]`;
+        const scoreSpan = document.createElement("span");
+        const scoreNum = typeof item.score === "number" ? item.score.toFixed(4) : String(item.score ?? "");
+        scoreSpan.textContent = `score=${scoreNum} · chunk #${item.chunk_index ?? 0}`;
+        header.append(docSpan, scoreSpan);
+
+        const meta = document.createElement("div");
+        meta.className = "citation-meta";
+        const sections = Array.isArray(item.section_path) && item.section_path.length > 0
+          ? item.section_path.join(" > ")
+          : "root";
+        meta.textContent = `${item.source || "unknown"} | ${sections}`;
+
+        const snippet = document.createElement("div");
+        snippet.className = "citation-snippet";
+        snippet.textContent = item.snippet || "";
+
+        card.append(header, meta, snippet);
+        citationsList.appendChild(card);
+      }
+    }
+
+    function renderMetrics(metrics) {
+      metricsGrid.replaceChildren();
+      if (!metrics || typeof metrics !== "object") {
+        const empty = document.createElement("div");
+        empty.className = "placeholder";
+        empty.textContent = "No telemetry returned.";
+        metricsGrid.appendChild(empty);
+        return;
+      }
+
+      for (const [key, value] of Object.entries(metrics)) {
+        const tile = document.createElement("div");
+        tile.className = "metric-tile";
+
+        const keyEl = document.createElement("div");
+        keyEl.className = "metric-key";
+        keyEl.textContent = key;
+
+        const valEl = document.createElement("div");
+        valEl.className = "metric-val";
+        valEl.textContent = value === null || value === undefined || value === "" ? "-" : String(value);
+
+        tile.append(keyEl, valEl);
+        metricsGrid.appendChild(tile);
+      }
+    }
+
+    function handleSseEvent(eventName, rawData) {
+      let payload;
+      try {
+        payload = JSON.parse(rawData);
+      } catch {
+        payload = { raw: rawData };
+      }
+
+      if (eventName === "token") {
+        tokenOutput.textContent += payload.token ?? "";
+      } else if (eventName === "citations") {
+        renderCitations(payload.citations || []);
+      } else if (eventName === "metrics") {
+        renderMetrics(payload);
+      } else if (eventName === "done") {
+        setStatus(`done (${payload.pipeline_version || "v3"})`, "done");
+      } else if (eventName === "error") {
+        setStatus("error", "error");
+        showError(`${payload.error_type || "Error"}: ${payload.error || "Unknown error"}`);
+      }
+    }
+
+    async function readSseStream(response) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) {
+          break;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        const normalized = buffer.replace(/\r\n/g, "\n");
+        const frames = normalized.split("\n\n");
+        buffer = frames.pop() ?? "";
+
+        for (const frame of frames) {
+          if (!frame.trim()) {
+            continue;
+          }
+          let eventName = "message";
+          const dataLines = [];
+          for (const line of frame.split("\n")) {
+            if (line.startsWith(":")) {
+              continue;
+            }
+            if (line.startsWith("event:")) {
+              eventName = line.slice(6).trim();
+            } else if (line.startsWith("data:")) {
+              dataLines.push(line.slice(5).trimStart());
+            }
+          }
+          if (dataLines.length > 0) {
+            handleSseEvent(eventName, dataLines.join("\n"));
+          }
+        }
+      }
+    }
+
+    async function sendChatRequest() {
+      const query = queryInput.value.trim();
+      if (!query) {
+        showError("Please enter a query before sending.");
+        return;
+      }
+
+      clearOutputs();
+      sendBtn.disabled = true;
+      setStatus("streaming...", "running");
+
+      const body = {
+        query,
+        pipeline_version: pipelineSelect.value,
+        stream: streamCheckbox.checked,
+      };
+      const sessionId = sessionInput.value.trim();
+      if (sessionId) {
+        body.session_id = sessionId;
+      }
+
+      try {
+        const response = await fetch(endpointInput.value.trim(), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": streamCheckbox.checked ? "text/event-stream" : "application/json",
+          },
+          body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`HTTP ${response.status}: ${errText}`);
+        }
+
+        const contentType = response.headers.get("content-type") || "";
+        if (contentType.includes("text/event-stream") && response.body) {
+          await readSseStream(response);
+          if (!statusPill.classList.contains("error")) {
+            setStatus("completed", "done");
+          }
+        } else {
+          const data = await response.json();
+          tokenOutput.textContent = data.answer || "";
+          renderCitations(data.citations || []);
+          renderMetrics(data.metrics || {});
+          setStatus(`done (${data.pipeline_version || body.pipeline_version})`, "done");
+        }
+      } catch (err) {
+        setStatus("error", "error");
+        showError(err instanceof Error ? err.message : String(err));
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    sendBtn.addEventListener("click", sendChatRequest);
+    queryInput.addEventListener("keydown", (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+        sendChatRequest();
+      }
+    });
+  </script>
+</body>
+</html>
