@@ -153,12 +153,22 @@ def set_request_metrics(
 
 
 def update_request_metrics(**kwargs: Any) -> RequestMetrics:
-    """Update fields on the active ``RequestMetrics`` context and return it."""
+    """Update fields on the active ``RequestMetrics`` context and return it.
+
+    Mutates the bound ``RequestMetrics`` instance in place when already scoped so
+    updates from child ``asyncio.Task`` nodes (e.g. LangGraph Pregel) remain
+    visible to the parent request context without cross-request leakage.
+    """
     current = _REQUEST_METRICS_VAR.get()
-    base_data = current.model_dump() if current is not None else {}
-    updated = RequestMetrics.model_validate({**base_data, **kwargs})
-    _REQUEST_METRICS_VAR.set(updated)
-    return updated.model_copy()
+    if current is None:
+        updated = RequestMetrics.model_validate(kwargs)
+        _REQUEST_METRICS_VAR.set(updated)
+        return updated.model_copy()
+
+    updated = RequestMetrics.model_validate({**current.model_dump(), **kwargs})
+    for field_name in RequestMetrics.model_fields:
+        setattr(current, field_name, getattr(updated, field_name))
+    return current.model_copy()
 
 
 def reset_request_metrics(token: Token[RequestMetrics | None] | None = None) -> None:
