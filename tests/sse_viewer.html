@@ -15,6 +15,7 @@
       --accent: #38bdf8;
       --accent-strong: #0284c7;
       --ok: #22c55e;
+      --warn: #f59e0b;
       --err: #ef4444;
       --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -34,7 +35,7 @@
     }
 
     .container {
-      max-width: 1180px;
+      max-width: 1240px;
       margin: 0 auto;
       display: grid;
       gap: 18px;
@@ -48,6 +49,13 @@
       gap: 12px;
       border-bottom: 1px solid var(--border);
       padding-bottom: 12px;
+    }
+
+    .header-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
     }
 
     h1 {
@@ -76,6 +84,11 @@
       border-color: var(--ok);
     }
 
+    .status-pill.warn {
+      color: var(--warn);
+      border-color: var(--warn);
+    }
+
     .status-pill.error {
       color: var(--err);
       border-color: var(--err);
@@ -96,15 +109,37 @@
       color: var(--accent);
     }
 
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .section-header h2 {
+      margin: 0;
+    }
+
     .controls-grid {
       display: grid;
-      grid-template-columns: 2fr 1.2fr 0.8fr auto;
+      grid-template-columns: 2fr 1.6fr 0.9fr auto;
       gap: 12px;
       align-items: end;
     }
 
-    @media (max-width: 840px) {
-      .controls-grid {
+    .ingest-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr auto;
+      gap: 12px;
+      align-items: end;
+      margin-top: 12px;
+    }
+
+    @media (max-width: 900px) {
+      .controls-grid,
+      .ingest-grid {
         grid-template-columns: 1fr;
       }
     }
@@ -113,6 +148,12 @@
       display: flex;
       flex-direction: column;
       gap: 6px;
+    }
+
+    .session-inline {
+      display: flex;
+      gap: 8px;
+      align-items: stretch;
     }
 
     label {
@@ -156,7 +197,18 @@
     .query-row {
       margin-top: 12px;
       display: flex;
-      gap: 12px;
+      gap: 10px;
+      align-items: stretch;
+      flex-wrap: wrap;
+    }
+
+    .query-row textarea {
+      flex: 1 1 360px;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 8px;
       align-items: stretch;
     }
 
@@ -165,10 +217,11 @@
       color: #ffffff;
       border: none;
       border-radius: 6px;
-      padding: 10px 20px;
+      padding: 10px 18px;
       font-weight: 600;
       cursor: pointer;
       white-space: nowrap;
+      transition: background 0.15s ease;
     }
 
     button:hover:not(:disabled) {
@@ -181,16 +234,111 @@
       cursor: not-allowed;
     }
 
+    button.secondary {
+      background: var(--panel-alt);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      font-size: 0.82rem;
+    }
+
+    button.secondary:hover:not(:disabled) {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--panel-alt);
+    }
+
+    button.compare-btn {
+      background: #0f766e;
+    }
+
+    button.compare-btn:hover:not(:disabled) {
+      background: #14b8a6;
+      color: #0f172a;
+    }
+
+    details.ingest-panel summary {
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.95rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--accent);
+    }
+
+    details.ingest-panel summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .ingest-status {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--panel-alt);
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      color: var(--muted);
+      display: none;
+    }
+
     .channels-grid {
       display: grid;
       grid-template-columns: 1.5fr 1fr;
       gap: 18px;
     }
 
+    .compare-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
     @media (max-width: 960px) {
-      .channels-grid {
+      .channels-grid,
+      .compare-grid {
         grid-template-columns: 1fr;
       }
+    }
+
+    .compare-card {
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .compare-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--mono);
+      font-size: 0.84rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .compare-answer {
+      font-size: 0.88rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text);
+      min-height: 90px;
+    }
+
+    .compare-meta {
+      font-family: var(--mono);
+      font-size: 0.76rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      padding-top: 8px;
     }
 
     .token-output {
@@ -198,7 +346,7 @@
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 14px;
-      min-height: 220px;
+      min-height: 200px;
       white-space: pre-wrap;
       word-break: break-word;
       font-size: 0.96rem;
@@ -216,17 +364,64 @@
       display: none;
     }
 
-    .citations-list {
+    .citations-list,
+    .session-timeline {
       display: grid;
       gap: 10px;
     }
 
-    .citation-card {
+    .citation-card,
+    .timeline-item {
       background: var(--panel-alt);
       border: 1px solid var(--border);
       border-left: 3px solid var(--accent);
       border-radius: 6px;
       padding: 10px 12px;
+    }
+
+    .timeline-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .timeline-query {
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 6px;
+      font-size: 0.9rem;
+    }
+
+    .timeline-answer {
+      font-size: 0.88rem;
+      color: var(--text);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      border: 1px solid var(--border);
+    }
+
+    .badge.hit {
+      color: var(--ok);
+      border-color: var(--ok);
+    }
+
+    .badge.miss {
+      color: var(--warn);
+      border-color: var(--warn);
     }
 
     .citation-header {
@@ -289,8 +484,41 @@
   <div class="container">
     <header>
       <h1>Agentic RAG Dual-Channel SSE Viewer</h1>
-      <span id="statusPill" class="status-pill">idle</span>
+      <div class="header-meta">
+        <span id="storeChunksBadge" class="status-pill">kb: probing...</span>
+        <span id="statusPill" class="status-pill">idle</span>
+      </div>
     </header>
+
+    <details id="ingestPanel" class="card ingest-panel">
+      <summary>
+        <span>Live Knowledge Base Ingest (POST /api/v1/documents/ingest)</span>
+        <span class="status-pill">SHA-256 Idempotent + Cache Invalidation</span>
+      </summary>
+      <div class="ingest-grid">
+        <div class="field">
+          <label for="ingestSourceInput">Document Source / Filename</label>
+          <input id="ingestSourceInput" type="text" value="custom_notes.md" />
+        </div>
+        <div class="field">
+          <label for="ingestPipelineSelect">Chunking Pipeline</label>
+          <select id="ingestPipelineSelect">
+            <option value="v3" selected>v3 (Semantic Markdown)</option>
+            <option value="v2">v2 (Semantic Markdown)</option>
+            <option value="v1">v1 (Fixed Window)</option>
+          </select>
+        </div>
+        <button id="ingestBtn" type="button">立即投喂</button>
+      </div>
+      <div class="field" style="margin-top: 10px;">
+        <label for="ingestContentInput">Markdown / Text Content</label>
+        <textarea
+          id="ingestContentInput"
+          placeholder="# Project-Hyperion-9921&#10;Paste Markdown documentation here to index live and invalidate stale cache..."
+        ></textarea>
+      </div>
+      <div id="ingestStatus" class="ingest-status"></div>
+    </details>
 
     <section class="card">
       <h2>Request Controls</h2>
@@ -300,8 +528,11 @@
           <input id="endpointInput" type="text" value="http://localhost:8000/api/v1/chat" />
         </div>
         <div class="field">
-          <label for="sessionInput">Session ID (optional)</label>
-          <input id="sessionInput" type="text" placeholder="auto-generated if blank" />
+          <label for="sessionInput">Session ID (Multi-Turn Thread)</label>
+          <div class="session-inline">
+            <input id="sessionInput" type="text" placeholder="auto-generated if blank" />
+            <button id="newSessionBtn" class="secondary" type="button">新建会话</button>
+          </div>
         </div>
         <div class="field">
           <label for="pipelineSelect">Pipeline Version</label>
@@ -318,8 +549,11 @@
       </div>
 
       <div class="query-row">
-        <textarea id="queryInput" placeholder="Ask a question against the RAG pipeline..."></textarea>
-        <button id="sendBtn" type="button">Send</button>
+        <textarea id="queryInput" placeholder="Ask a question against the RAG pipeline... (Ctrl/Cmd + Enter to send)"></textarea>
+        <div class="btn-group">
+          <button id="sendBtn" type="button">Send</button>
+          <button id="compareAllBtn" class="compare-btn" type="button">⚡ v1/v2/v3 同屏对比</button>
+        </div>
       </div>
       <div id="errorBanner" class="error-banner"></div>
     </section>
@@ -344,20 +578,70 @@
         <div class="placeholder">No telemetry received yet.</div>
       </div>
     </section>
+
+    <section id="compareSection" class="card" style="display: none;">
+      <div class="section-header">
+        <h2>v1 / v2 / v3 Side-by-Side Comparison</h2>
+        <span id="compareSummaryPill" class="status-pill">ready</span>
+      </div>
+      <div id="compareGrid" class="compare-grid"></div>
+    </section>
+
+    <section class="card">
+      <div class="section-header">
+        <h2>Multi-Turn Session History</h2>
+        <button id="clearHistoryBtn" class="secondary" type="button">清空历史</button>
+      </div>
+      <div id="sessionTimeline" class="session-timeline">
+        <div class="placeholder">No turns recorded yet. Send a query to trace SQLite checkpoint continuity and cache hits.</div>
+      </div>
+    </section>
   </div>
 
   <script>
     const endpointInput = document.getElementById("endpointInput");
     const sessionInput = document.getElementById("sessionInput");
+    const newSessionBtn = document.getElementById("newSessionBtn");
+    const clearHistoryBtn = document.getElementById("clearHistoryBtn");
     const pipelineSelect = document.getElementById("pipelineSelect");
     const streamCheckbox = document.getElementById("streamCheckbox");
     const queryInput = document.getElementById("queryInput");
     const sendBtn = document.getElementById("sendBtn");
+    const compareAllBtn = document.getElementById("compareAllBtn");
     const statusPill = document.getElementById("statusPill");
+    const storeChunksBadge = document.getElementById("storeChunksBadge");
     const errorBanner = document.getElementById("errorBanner");
     const tokenOutput = document.getElementById("tokenOutput");
     const citationsList = document.getElementById("citationsList");
     const metricsGrid = document.getElementById("metricsGrid");
+    const compareSection = document.getElementById("compareSection");
+    const compareSummaryPill = document.getElementById("compareSummaryPill");
+    const compareGrid = document.getElementById("compareGrid");
+    const sessionTimeline = document.getElementById("sessionTimeline");
+
+    const ingestSourceInput = document.getElementById("ingestSourceInput");
+    const ingestPipelineSelect = document.getElementById("ingestPipelineSelect");
+    const ingestContentInput = document.getElementById("ingestContentInput");
+    const ingestBtn = document.getElementById("ingestBtn");
+    const ingestStatus = document.getElementById("ingestStatus");
+
+    if (window.location && window.location.origin && window.location.origin.startsWith("http")) {
+      endpointInput.value = `${window.location.origin}/api/v1/chat`;
+    }
+
+    const sessionTurns = [];
+
+    function resolveApiBase() {
+      const raw = endpointInput.value.trim().replace(/\/+$/, "");
+      if (raw.endsWith("/api/v1/chat")) {
+        return raw.slice(0, -"/chat".length);
+      }
+      const idx = raw.indexOf("/api/v1");
+      if (idx !== -1) {
+        return raw.slice(0, idx + "/api/v1".length);
+      }
+      return "http://localhost:8000/api/v1";
+    }
 
     function setStatus(text, kind = "") {
       statusPill.textContent = text;
@@ -376,6 +660,22 @@
       tokenOutput.classList.remove("placeholder");
       citationsList.replaceChildren();
       metricsGrid.replaceChildren();
+    }
+
+    async function refreshDocumentStats() {
+      try {
+        const resp = await fetch(`${resolveApiBase()}/documents/stats`);
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}`);
+        }
+        const stats = await resp.json();
+        storeChunksBadge.textContent =
+          `kb: ${stats.total_chunks_in_store} chunks (${stats.runtime_mode})`;
+        storeChunksBadge.className = "status-pill done";
+      } catch {
+        storeChunksBadge.textContent = "kb: offline";
+        storeChunksBadge.className = "status-pill warn";
+      }
     }
 
     function renderCitations(citations) {
@@ -444,7 +744,60 @@
       }
     }
 
-    function handleSseEvent(eventName, rawData) {
+    function renderTimeline() {
+      sessionTimeline.replaceChildren();
+      if (sessionTurns.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "placeholder";
+        empty.textContent = "No turns recorded yet. Send a query to trace SQLite checkpoint continuity and cache hits.";
+        sessionTimeline.appendChild(empty);
+        return;
+      }
+
+      for (let i = sessionTurns.length - 1; i >= 0; i -= 1) {
+        const turn = sessionTurns[i];
+        const card = document.createElement("div");
+        card.className = "timeline-item";
+
+        const header = document.createElement("div");
+        header.className = "timeline-header";
+
+        const left = document.createElement("span");
+        left.textContent = `Turn #${turn.turnNumber} · ${turn.pipeline} · session=${turn.sessionId}`;
+
+        const right = document.createElement("span");
+        const cacheBadge = document.createElement("span");
+        cacheBadge.className = turn.cacheHit ? "badge hit" : "badge miss";
+        cacheBadge.textContent = turn.cacheHit ? "CACHE HIT" : "CACHE MISS";
+        const timing = document.createElement("span");
+        timing.style.marginLeft = "8px";
+        timing.textContent = `TTFT=${turn.ttftMs ?? "-"}ms · Latency=${turn.latencyMs ?? "-"}ms · Citations=${turn.citationsCount}`;
+        right.append(cacheBadge, timing);
+
+        header.append(left, right);
+
+        const qEl = document.createElement("div");
+        qEl.className = "timeline-query";
+        qEl.textContent = `Q: ${turn.query}`;
+
+        const aEl = document.createElement("div");
+        aEl.className = "timeline-answer";
+        aEl.textContent = `A: ${turn.answer}`;
+
+        card.append(header, qEl, aEl);
+        sessionTimeline.appendChild(card);
+      }
+    }
+
+    function recordTurn(turn) {
+      sessionTurns.push({
+        turnNumber: sessionTurns.length + 1,
+        ...turn,
+      });
+      renderTimeline();
+    }
+
+    function handleSseEvent(eventName, rawData, capture) {
       let payload;
       try {
         payload = JSON.parse(rawData);
@@ -453,20 +806,25 @@
       }
 
       if (eventName === "token") {
-        tokenOutput.textContent += payload.token ?? "";
+        const piece = payload.token ?? "";
+        tokenOutput.textContent += piece;
+        capture.answer += piece;
       } else if (eventName === "citations") {
-        renderCitations(payload.citations || []);
+        capture.citations = payload.citations || [];
+        renderCitations(capture.citations);
       } else if (eventName === "metrics") {
-        renderMetrics(payload);
+        capture.metrics = payload || {};
+        renderMetrics(capture.metrics);
       } else if (eventName === "done") {
         setStatus(`done (${payload.pipeline_version || "v3"})`, "done");
       } else if (eventName === "error") {
+        capture.hadError = true;
         setStatus("error", "error");
         showError(`${payload.error_type || "Error"}: ${payload.error || "Unknown error"}`);
       }
     }
 
-    async function readSseStream(response) {
+    async function readSseStream(response, capture) {
       const reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
       let buffer = "";
@@ -498,7 +856,7 @@
             }
           }
           if (dataLines.length > 0) {
-            handleSseEvent(eventName, dataLines.join("\n"));
+            handleSseEvent(eventName, dataLines.join("\n"), capture);
           }
         }
       }
@@ -513,17 +871,26 @@
 
       clearOutputs();
       sendBtn.disabled = true;
+      compareAllBtn.disabled = true;
       setStatus("streaming...", "running");
 
+      if (!sessionInput.value.trim()) {
+        sessionInput.value = `sess-${Date.now().toString(36)}`;
+      }
+      const activeSessionId = sessionInput.value.trim();
       const body = {
         query,
+        session_id: activeSessionId,
         pipeline_version: pipelineSelect.value,
         stream: streamCheckbox.checked,
       };
-      const sessionId = sessionInput.value.trim();
-      if (sessionId) {
-        body.session_id = sessionId;
-      }
+
+      const capture = {
+        answer: "",
+        citations: [],
+        metrics: {},
+        hadError: false,
+      };
 
       try {
         const response = await fetch(endpointInput.value.trim(), {
@@ -542,31 +909,203 @@
 
         const contentType = response.headers.get("content-type") || "";
         if (contentType.includes("text/event-stream") && response.body) {
-          await readSseStream(response);
+          await readSseStream(response, capture);
           if (!statusPill.classList.contains("error")) {
             setStatus("completed", "done");
           }
         } else {
           const data = await response.json();
-          tokenOutput.textContent = data.answer || "";
-          renderCitations(data.citations || []);
-          renderMetrics(data.metrics || {});
+          capture.answer = data.answer || "";
+          capture.citations = data.citations || [];
+          capture.metrics = data.metrics || {};
+          tokenOutput.textContent = capture.answer;
+          renderCitations(capture.citations);
+          renderMetrics(capture.metrics);
           setStatus(`done (${data.pipeline_version || body.pipeline_version})`, "done");
+        }
+
+        if (!capture.hadError) {
+          recordTurn({
+            sessionId: activeSessionId,
+            pipeline: body.pipeline_version,
+            query,
+            answer: capture.answer,
+            cacheHit: Boolean(capture.metrics.cache_hit),
+            ttftMs: capture.metrics.ttft_ms ?? "-",
+            latencyMs: capture.metrics.latency_ms ?? "-",
+            citationsCount: capture.citations.length,
+          });
         }
       } catch (err) {
         setStatus("error", "error");
         showError(err instanceof Error ? err.message : String(err));
       } finally {
         sendBtn.disabled = false;
+        compareAllBtn.disabled = false;
       }
     }
 
+    async function compareAllPipelines() {
+      const query = queryInput.value.trim();
+      if (!query) {
+        showError("Please enter a query before running v1/v2/v3 comparison.");
+        return;
+      }
+
+      errorBanner.textContent = "";
+      errorBanner.style.display = "none";
+      sendBtn.disabled = true;
+      compareAllBtn.disabled = true;
+      compareSection.style.display = "block";
+      compareSummaryPill.textContent = "running v1 / v2 / v3...";
+      compareSummaryPill.className = "status-pill running";
+      compareGrid.replaceChildren();
+
+      const versions = ["v1", "v2", "v3"];
+      const baseSession = sessionInput.value.trim() || `cmp-${Date.now().toString(36)}`;
+
+      try {
+        const results = await Promise.all(
+          versions.map(async (version) => {
+            const started = performance.now();
+            const resp = await fetch(endpointInput.value.trim(), {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+              },
+              body: JSON.stringify({
+                query,
+                session_id: `${baseSession}-${version}`,
+                pipeline_version: version,
+                stream: false,
+              }),
+            });
+            const clientMs = (performance.now() - started).toFixed(2);
+            if (!resp.ok) {
+              const errText = await resp.text();
+              return { version, error: `HTTP ${resp.status}: ${errText}`, clientMs };
+            }
+            const data = await resp.json();
+            return { version, data, clientMs };
+          })
+        );
+
+        for (const item of results) {
+          const card = document.createElement("div");
+          card.className = "compare-card";
+
+          const header = document.createElement("div");
+          header.className = "compare-card-header";
+          const title = document.createElement("span");
+          title.textContent = item.version.toUpperCase();
+          const badge = document.createElement("span");
+          if (item.error) {
+            badge.className = "badge miss";
+            badge.textContent = "ERROR";
+          } else {
+            const m = item.data.metrics || {};
+            badge.className = m.cache_hit ? "badge hit" : "badge miss";
+            badge.textContent = m.cache_hit ? "CACHE HIT" : (m.route_tier || "ok");
+          }
+          header.append(title, badge);
+
+          const answerEl = document.createElement("div");
+          answerEl.className = "compare-answer";
+          answerEl.textContent = item.error ? item.error : (item.data.answer || "");
+
+          const metaEl = document.createElement("div");
+          metaEl.className = "compare-meta";
+          if (!item.error) {
+            const m = item.data.metrics || {};
+            const citCount = Array.isArray(item.data.citations) ? item.data.citations.length : 0;
+            metaEl.textContent =
+              `Citations=${citCount} · TTFT=${m.ttft_ms ?? "-"}ms · ` +
+              `Server=${m.latency_ms ?? "-"}ms · Client=${item.clientMs}ms`;
+          } else {
+            metaEl.textContent = `Client=${item.clientMs}ms`;
+          }
+
+          card.append(header, answerEl, metaEl);
+          compareGrid.appendChild(card);
+        }
+
+        compareSummaryPill.textContent = "completed";
+        compareSummaryPill.className = "status-pill done";
+      } catch (err) {
+        compareSummaryPill.textContent = "error";
+        compareSummaryPill.className = "status-pill error";
+        showError(err instanceof Error ? err.message : String(err));
+      } finally {
+        sendBtn.disabled = false;
+        compareAllBtn.disabled = false;
+      }
+    }
+
+    async function ingestInlineDocument() {
+      const source = ingestSourceInput.value.trim();
+      const content = ingestContentInput.value.trim();
+      if (!source || !content) {
+        ingestStatus.style.display = "block";
+        ingestStatus.textContent = "Error: source and content must both be non-empty.";
+        return;
+      }
+
+      ingestBtn.disabled = true;
+      ingestStatus.style.display = "block";
+      ingestStatus.textContent = "Ingesting document and updating hybrid index...";
+
+      try {
+        const resp = await fetch(`${resolveApiBase()}/documents/ingest`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            documents: [{ source, content }],
+            pipeline_version: ingestPipelineSelect.value,
+            invalidate_cache: true,
+          }),
+        });
+        if (!resp.ok) {
+          const errText = await resp.text();
+          throw new Error(`HTTP ${resp.status}: ${errText}`);
+        }
+        const data = await resp.json();
+        const item = (data.items && data.items[0]) || {};
+        ingestStatus.textContent =
+          `status=${data.status} | chunks_added=${data.total_chunks_added} | ` +
+          `total_in_store=${data.total_chunks_in_store} | ` +
+          `skipped_duplicate=${Boolean(item.skipped_duplicate)} | ` +
+          `cache_invalidated=${data.cache_entries_invalidated} | ` +
+          `sha256=${(item.doc_sha256 || "").slice(0, 12)}...`;
+        await refreshDocumentStats();
+      } catch (err) {
+        ingestStatus.textContent = `Ingest error: ${err instanceof Error ? err.message : String(err)}`;
+      } finally {
+        ingestBtn.disabled = false;
+      }
+    }
+
+    newSessionBtn.addEventListener("click", () => {
+      sessionInput.value = `sess-${Date.now().toString(36)}`;
+      sessionTurns.length = 0;
+      renderTimeline();
+    });
+
+    clearHistoryBtn.addEventListener("click", () => {
+      sessionTurns.length = 0;
+      renderTimeline();
+    });
+
+    ingestBtn.addEventListener("click", ingestInlineDocument);
     sendBtn.addEventListener("click", sendChatRequest);
+    compareAllBtn.addEventListener("click", compareAllPipelines);
     queryInput.addEventListener("keydown", (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
         sendChatRequest();
       }
     });
+
+    refreshDocumentStats();
   </script>
 </body>
 </html>

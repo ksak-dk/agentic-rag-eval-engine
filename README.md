@@ -141,18 +141,28 @@ flowchart TD
 # 1. 安装全量依赖与开发工具链
 uv sync --all-extras --dev
 
-# 2. 运行代码风格与格式门禁
+# 2. 零配置一键启动 FastAPI (自动探测环境并平滑启用内置 demo 模式与看板)
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
+# 启动后直接访问 http://127.0.0.1:8000/ 打开交互看板，支持：
+#   - 在线知识库投喂 (POST /api/v1/documents/ingest，SHA-256 幂等去重 + 语义缓存失效)
+#   - 多轮会话时间线 (绑定 session_id 验证 AsyncSqliteSaver 断点续传与缓存命中)
+#   - v1 / v2 / v3 同屏横向对比
+
+# 3. (可选) 通过 CLI 增量摄入本地 Markdown / TXT 文档
+uv run python -m app.retrieval.ingest --path README.md --pipeline v3
+
+# 4. 运行代码风格与格式门禁
 uv run ruff check .
 uv run ruff format --check .
 
-# 3. 运行全量离线单元测试 (Windows 请在允许本地回环套接字的终端中执行)
+# 5. 运行全量离线单元测试 (Windows 请在允许本地回环套接字的终端中执行)
 uv run pytest -v
 
-# 4. 一键运行内存级 ASGI 端到端流式演示 (v1 -> v2 -> v3 冷查询 -> v3 Redis 语义缓存命中)
+# 6. 一键运行内存级 ASGI 端到端流式演示 (v1 -> v2 -> v3 冷查询 -> v3 Redis 语义缓存命中)
 uv run python scripts/demo_e2e.py --mode asgi
 # 演示实录将自动保存至 ./data/e2e_demo_transcript.md
 
-# 5. (可选) 一键复现全量压测与评测报告
+# 7. (可选) 一键复现全量压测与评测报告
 uv run python -m evals.load_test --generate-report
 ```
 
@@ -186,22 +196,32 @@ agentic-rag-eval-engine/
 │   └── workflows/
 │       └── ci.yml                  # GitHub Actions 自动化 Ruff + 离线 Pytest CI
 ├── app/
+│   ├── adapters/
+│   │   └── mock/
+│   │       ├── eval_heuristics.py  # 离线数据集构建、Ragas 启发式打分与压测仿真适配器
+│   │       ├── retriever.py        # InMemoryHybridRetriever (Dense + BM25 + RRF 仿真)
+│   │       └── router.py           # DemoLLMRouter (确定性流式回答与结构化校验)
 │   ├── api/v1/
-│   │   └── chat.py                 # POST /api/v1/chat (双通道 SSE) & GET /api/v1/health
+│   │   ├── chat.py                 # POST /api/v1/chat (双通道 SSE) & GET /api/v1/health
+│   │   └── ingest.py               # POST /api/v1/documents/ingest & GET /api/v1/documents/stats
 │   ├── cache/
-│   │   └── semantic_cache.py       # Redis 8 RediSearch HNSW 向量语义缓存 (Fail-Open)
+│   │   └── semantic_cache.py       # Redis 8 RediSearch HNSW 语义缓存 + InMemory/SingleFlight
 │   ├── core/
-│   │   ├── config.py               # Pydantic V2 BaseSettings 配置中心 (v1/v2/v3 切换)
+│   │   ├── config.py               # Pydantic V2 BaseSettings 配置中心 (runtime_mode & v1/v2/v3)
+│   │   ├── container.py            # ServiceContainer 双模式 (live/demo/test) 自动装配容器
 │   │   ├── logging.py              # structlog 单行 JSON 日志与 contextvars RequestMetrics
 │   │   └── router.py               # Groq <-> Google Gemini 双引擎自动容灾路由
 │   ├── graph/
 │   │   ├── state.py                # RAGGraphState、Citation 模型与状态约束
 │   │   ├── nodes.py                # 9 个异步 LangGraph 节点与结构化输出契约
 │   │   └── workflow.py             # StateGraph 编排、max_retries 熔断与 AsyncSqliteSaver
+│   ├── ports/
+│   │   └── interfaces.py           # RetrieverPort / LLMRouterPort / SemanticCachePort 契约层
 │   ├── retrieval/
 │   │   ├── chunker.py              # FixedChunker (v1) & SemanticChunker Markdown 切分 (v2/v3)
-│   │   └── hybrid_store.py         # Qdrant int8 Dense + BM25 Sparse + RRF + FP16 Reranker
-│   └── main.py                     # FastAPI 应用工厂与异步 Lifespan 资源生命周期管理
+│   │   ├── hybrid_store.py         # Qdrant int8 Dense + BM25 Sparse + RRF + FP16 Reranker
+│   │   └── ingest.py               # SHA-256 幂等文档增量摄入流水线与 CLI
+│   └── main.py                     # FastAPI 应用工厂、Lifespan 容器装配与 / /viewer 看板路由
 ├── evals/
 │   ├── dataset_gen.py              # 合成多跳 / 单跳 / 不可回答评测数据集生成器
 │   ├── run_ragas.py                # Ragas v0.2+ OOP 多流水线对比评测器
@@ -210,13 +230,16 @@ agentic-rag-eval-engine/
 ├── scripts/
 │   └── demo_e2e.py                 # 一键端到端流式演示脚本 (--mode asgi / --mode live)
 ├── tests/
-│   ├── sse_viewer.html             # 零构建双通道 SSE 可视化联调看板
+│   ├── sse_viewer.html             # 零构建交互看板 (在线投喂 / 多轮会话 / v1-v3 同屏对比)
 │   ├── test_api.py                 # FastAPI 路由、SSE 事件流与 Lifespan 单测
+│   ├── test_container_lifespan.py  # 零配置 Lifespan 容器装配与双模式平滑回退单测
 │   ├── test_demo_e2e.py            # E2E 演示脚本 ASGI 全流程与 SSE 解析单测
 │   ├── test_eval_dataset_gen.py    # 合成评测集生成单测
 │   ├── test_eval_ragas.py          # Ragas v0.2+ 对比评测单测
 │   ├── test_graph_boundaries.py    # LangGraph 重试上限、降级熔断与检查点单测
+│   ├── test_ingest.py              # 文档增量摄入、SHA-256 去重、缓存失效与 CLI 单测
 │   ├── test_load_test.py           # 异步并发压测与 SLA 判定单测
+│   ├── test_ports_and_adapters.py  # 六边形端口契约与离线/启发式适配器单测
 │   ├── test_retrieval.py           # 分块器与混合检索协议桩单测
 │   └── test_semantic_cache.py      # Redis 8 语义缓存相似度与 Fail-Open 单测
 ├── docker-compose.yml              # Qdrant + Redis 8 (+ 可选 Langfuse/Postgres 16)

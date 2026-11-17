@@ -15,10 +15,17 @@ import re
 from collections import Counter
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.retrieval.chunker import ChunkerConfig, ChunkMetadata, ChunkMode, MarkdownHeaderChunker
+from app.retrieval.chunker import (
+    ChunkerConfig,
+    ChunkMetadata,
+    ChunkMode,
+    DocumentChunk,
+    MarkdownHeaderChunker,
+)
 from app.retrieval.hybrid_store import RetrievedChunk
 
 _TOKEN_RE: re.Pattern[str] = re.compile(r"[a-zA-Z0-9_.-]+|[\u4e00-\u9fff]")
@@ -97,10 +104,35 @@ class _IndexedEntry(BaseModel):
 class InMemoryHybridRetriever:
     """Zero-dependency in-memory hybrid retriever simulating dense + BM25 + RRF + rerank."""
 
-    def __init__(self, chunks: Sequence[RetrievedChunk]) -> None:
+    def __init__(self, chunks: Sequence[RetrievedChunk | DocumentChunk] = ()) -> None:
+        self._chunks_by_key: dict[tuple[str, int], RetrievedChunk] = {}
         self._entries: list[_IndexedEntry] = []
         self._idf: dict[str, float] = {}
-        self._build_index(chunks)
+        self._lock = asyncio.Lock()
+        for raw_chunk in chunks:
+            coerced = self._coerce_chunk(raw_chunk, default_rank=len(self._chunks_by_key))
+            key = self._chunk_key(coerced)
+            self._chunks_by_key[key] = coerced
+        self._build_index(list(self._chunks_by_key.values()))
+
+    @staticmethod
+    def _chunk_key(chunk: RetrievedChunk) -> tuple[str, int]:
+        return (chunk.metadata.doc_id, chunk.metadata.chunk_index)
+
+    @staticmethod
+    def _coerce_chunk(
+        chunk: RetrievedChunk | DocumentChunk,
+        *,
+        default_rank: int = 0,
+    ) -> RetrievedChunk:
+        if isinstance(chunk, RetrievedChunk):
+            return chunk
+        return RetrievedChunk(
+            text=chunk.text,
+            metadata=chunk.metadata,
+            score=0.5,
+            rank=default_rank,
+        )
 
     def _build_index(self, chunks: Sequence[RetrievedChunk]) -> None:
         doc_freq: Counter[str] = Counter()
@@ -247,6 +279,27 @@ class InMemoryHybridRetriever:
     @property
     def chunk_count(self) -> int:
         return len(self._entries)
+
+    def count_chunks(self) -> int:
+        """Return the total number of indexed chunks currently in memory."""
+        return len(self._entries)
+
+    async def add_chunks(self, chunks: Sequence[Any]) -> int:
+        """Incrementally upsert chunks by ``(doc_id, chunk_index)`` and rebuild index."""
+        if not chunks:
+            return 0
+        async with self._lock:
+            changed = 0
+            for raw_chunk in chunks:
+                coerced = self._coerce_chunk(raw_chunk, default_rank=len(self._chunks_by_key))
+                key = self._chunk_key(coerced)
+                existing = self._chunks_by_key.get(key)
+                if existing is None or existing.text != coerced.text:
+                    self._chunks_by_key[key] = coerced
+                    changed += 1
+            if changed > 0:
+                self._build_index(list(self._chunks_by_key.values()))
+            return changed
 
     async def search(
         self,

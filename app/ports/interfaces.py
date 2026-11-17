@@ -31,6 +31,14 @@ class RetrieverPort(Protocol):
         """Retrieve up to ``top_k`` ranked chunks for ``query``."""
         ...
 
+    async def add_chunks(self, chunks: Sequence[Any]) -> int:
+        """Incrementally upsert chunks into the retrieval store and return added/updated count."""
+        ...
+
+    def count_chunks(self) -> int:
+        """Return the total number of indexed chunks currently held by the store."""
+        ...
+
 
 @runtime_checkable
 class LLMRouterPort(Protocol):

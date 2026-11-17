@@ -25,6 +25,48 @@ _CONTEXT_BLOCK_RE: re.Pattern[str] = re.compile(
     r"\[([^\[\]\s]+)\]\s*\(source:\s*([^,\)]+),\s*section:\s*([^\)]+)\)\s*\n(.*?)(?=\n\n---\n\n|\Z)",
     re.DOTALL,
 )
+_STOPWORDS: frozenset[str] = frozenset(
+    {
+        "the",
+        "is",
+        "are",
+        "was",
+        "were",
+        "a",
+        "an",
+        "and",
+        "or",
+        "of",
+        "to",
+        "in",
+        "on",
+        "for",
+        "with",
+        "how",
+        "what",
+        "when",
+        "where",
+        "why",
+        "which",
+        "who",
+        "does",
+        "do",
+        "did",
+        "its",
+        "it",
+        "this",
+        "that",
+        "can",
+        "from",
+        "about",
+        "explain",
+        "describe",
+        "tell",
+        "me",
+        "between",
+    }
+)
+_SENTENCE_SPLIT_RE: re.Pattern[str] = re.compile(r"(?<=[.!?\u3002\uff01\uff1f])\s+")
 
 
 class DemoLLMRouter:
@@ -67,7 +109,9 @@ class DemoLLMRouter:
         )
 
     @staticmethod
-    def _extract_question_and_contexts(messages: Any) -> tuple[str, list[tuple[str, str]]]:
+    def _extract_question_and_contexts(
+        messages: Any,
+    ) -> tuple[str, list[tuple[str, str, str]]]:
         user_msg = ""
         if isinstance(messages, Sequence) and not isinstance(messages, (str, bytes)):
             for item in messages:
@@ -83,13 +127,56 @@ class DemoLLMRouter:
             q_part, ctx_part = user_msg, ""
         question = q_part.removeprefix("Question:").strip()
 
-        contexts: list[tuple[str, str]] = []
+        contexts: list[tuple[str, str, str]] = []
         for match in _CONTEXT_BLOCK_RE.finditer(ctx_part):
             doc_id = match.group(1).strip()
+            source = match.group(2).strip()
             body = re.sub(r"\s+", " ", match.group(4)).strip()
             if doc_id and body:
-                contexts.append((doc_id, body))
+                contexts.append((doc_id, source, body))
         return question, contexts
+
+    @staticmethod
+    def _select_salient_snippets(
+        question: str,
+        contexts: list[tuple[str, str, str]],
+        limit: int,
+    ) -> list[tuple[str, str, str, int]]:
+        q_terms = {
+            tok
+            for tok in re.findall(r"[a-z0-9_.-]+|[\u4e00-\u9fff]+", question.lower())
+            if tok not in _STOPWORDS and len(tok) > 1
+        }
+        scored: list[tuple[int, int, str, str, str]] = []
+        for idx, (doc_id, source, body) in enumerate(contexts):
+            sentences = [s.strip() for s in _SENTENCE_SPLIT_RE.split(body) if s.strip()]
+            best_sentence = body
+            best_hits = 0
+            if sentences and q_terms:
+                ranked_sents: list[tuple[int, int, str]] = []
+                for s_idx, sent in enumerate(sentences):
+                    s_lower = sent.lower()
+                    hits = sum(1 for term in q_terms if term in s_lower)
+                    ranked_sents.append((hits, -s_idx, sent))
+                ranked_sents.sort(reverse=True)
+                top_sents = [s for hits, _, s in ranked_sents[:2] if hits > 0]
+                if top_sents:
+                    best_sentence = " ".join(top_sents)
+                    best_hits = ranked_sents[0][0]
+            if best_hits == 0 and q_terms:
+                body_lower = body.lower()
+                best_hits = sum(1 for term in q_terms if term in body_lower)
+
+            clipped = best_sentence[:260].rstrip()
+            if len(best_sentence) > 260:
+                clipped = f"{clipped}..."
+            scored.append((best_hits, -idx, doc_id, source, clipped))
+
+        scored.sort(reverse=True)
+        return [
+            (doc_id, source, snippet, hits)
+            for hits, _, doc_id, source, snippet in scored[: max(1, limit)]
+        ]
 
     @classmethod
     def _synthesize_answer(cls, messages: Any, tier: RouteTier) -> str:
@@ -105,19 +192,32 @@ class DemoLLMRouter:
 
         q_lower = question.lower()
         q_words = set(re.findall(r"[a-z0-9_.-]+|[\u4e00-\u9fff]+", q_lower))
-        doc_ids = [doc_id for doc_id, _ in contexts]
-        primary_id = doc_ids[0]
-        secondary_id = doc_ids[1] if len(doc_ids) > 1 else primary_id
-
-        lead_snippets: list[str] = []
         limit = 1 if tier == RouteTier.FAST else min(2, len(contexts))
-        for doc_id, body in contexts[:limit]:
-            clipped = body[:220].rstrip()
-            if len(body) > 220:
-                clipped = f"{clipped}..."
-            lead_snippets.append(f"{clipped} [{doc_id}]")
+        selected = cls._select_salient_snippets(question, contexts, limit=limit)
+        primary_id, primary_source, _, _ = selected[0]
+        secondary_id = selected[1][0] if len(selected) > 1 else primary_id
+        lead_snippets = [f"{snippet} [{doc_id}]" for doc_id, _, snippet, _ in selected]
 
-        if q_words & {"v1", "v2", "v3", "infinite", "langgraph", "loop", "loops"}:
+        is_builtin_source = any(
+            marker in primary_source.lower()
+            for marker in (
+                "readme.md",
+                "gemini.md",
+                "benchmark_report.md",
+                "builtin://",
+                "docs/test.md",
+            )
+        )
+
+        if is_builtin_source and q_words & {
+            "v1",
+            "v2",
+            "v3",
+            "infinite",
+            "langgraph",
+            "loop",
+            "loops",
+        }:
             return (
                 "In this engine, v1 uses fixed chunking with Qdrant INT8 dense-only search; "
                 "v2 adds Markdown header semantic chunking, BM25 sparse + Fusion.RRF, and local "
@@ -127,7 +227,15 @@ class DemoLLMRouter:
                 f"Evidence: {lead_snippets[-1]}"
             )
 
-        if q_words & {"bm25", "rrf", "rerank", "reranking", "qdrant", "dense", "sparse"}:
+        if is_builtin_source and q_words & {
+            "bm25",
+            "rrf",
+            "rerank",
+            "reranking",
+            "qdrant",
+            "dense",
+            "sparse",
+        }:
             if tier == RouteTier.FAST:
                 return (
                     "The v1 baseline stores 1024-dim BAAI/bge-m3 dense vectors in Qdrant with "
@@ -141,7 +249,9 @@ class DemoLLMRouter:
                 f"Evidence: {lead_snippets[-1]}"
             )
 
-        if (q_words & {"vram", "3060", "gpu", "6gb", "显存"}) or "6 gb" in q_lower:
+        if is_builtin_source and (
+            (q_words & {"vram", "3060", "gpu", "6gb", "显存"}) or "6 gb" in q_lower
+        ):
             return (
                 "Under the RTX 3060 6 GB VRAM hard budget, zero local LLMs are deployed: "
                 "only FP16 BAAI/bge-m3 (~1.1 GB) and BAAI/bge-reranker-v2-m3 (~1.1 GB) run on "
@@ -149,7 +259,16 @@ class DemoLLMRouter:
                 f"Details: {lead_snippets[-1]}"
             )
 
-        if q_words & {"ragas", "benchmark", "benchmarks", "eval", "evals", "sla", "p95", "评测"}:
+        if is_builtin_source and q_words & {
+            "ragas",
+            "benchmark",
+            "benchmarks",
+            "eval",
+            "evals",
+            "sla",
+            "p95",
+            "评测",
+        }:
             return (
                 "Ragas v0.2+ benchmarks show Overall Score rising from 0.6759 (v1) to 0.8554 (v2) "
                 "and 0.9950 (v3, Context Recall 1.0000, Faithfulness 0.9851), while concurrent load "
@@ -158,12 +277,15 @@ class DemoLLMRouter:
             )
 
         if tier == RouteTier.FAST:
-            return f"Based on baseline dense retrieval: {lead_snippets[0]}"
+            return f"Based on retrieved source ({primary_source}): {lead_snippets[0]}"
 
         joined = " | ".join(lead_snippets)
         if secondary_id != primary_id:
-            return f"Grounded synthesis across retrieved documentation [{primary_id}] [{secondary_id}]: {joined}"
-        return f"Grounded synthesis from project documentation [{primary_id}]: {joined}"
+            return (
+                f"Grounded synthesis from {primary_source} [{primary_id}] [{secondary_id}]: "
+                f"{joined}"
+            )
+        return f"Grounded synthesis from {primary_source} [{primary_id}]: {joined}"
 
     async def ainvoke(
         self,

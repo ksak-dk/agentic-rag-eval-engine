@@ -24,7 +24,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from collections.abc import Sequence
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import structlog
 import torch
@@ -266,6 +266,7 @@ class HybridVectorStore:
         self._reranker = reranker
         self._collection = collection_name
         self._batch_size = upsert_batch_size
+        self._indexed_chunks: int = 0
 
     # ------------------------------------------------------------------
     # Collection management
@@ -379,8 +380,25 @@ class HybridVectorStore:
             total += len(batch)
             logger.debug("Batch upserted", batch_size=len(batch), total=total)
 
+        self._indexed_chunks += total
         logger.info("Upsert complete", collection=self._collection, total_points=total)
         return total
+
+    async def add_chunks(self, chunks: Sequence[Any]) -> int:
+        """Incrementally embed and upsert ``DocumentChunk`` or ``RetrievedChunk`` items."""
+        if not chunks:
+            return 0
+        normalized: list[DocumentChunk] = [
+            c
+            if isinstance(c, DocumentChunk)
+            else DocumentChunk.build(text=str(c.text), metadata=c.metadata)
+            for c in chunks
+        ]
+        return await self.upsert_chunks(normalized)
+
+    def count_chunks(self) -> int:
+        """Return the number of chunks tracked as upserted by this store instance."""
+        return self._indexed_chunks
 
     # ------------------------------------------------------------------
     # Search

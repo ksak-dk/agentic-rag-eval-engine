@@ -29,12 +29,14 @@ from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import ValidationError
 
 from app.api.v1.chat import router as chat_v1_router
+from app.api.v1.ingest import router as ingest_v1_router
 from app.core.config import Settings, get_settings
 from app.core.container import ServiceContainer, is_cuda_available
 from app.core.logging import configure_logging, sample_cuda_vram_mb
 from app.core.router import LLMRouter
 from app.graph.nodes import GraphDependencies
 from app.graph.workflow import AgenticRAGWorkflow, open_async_sqlite_saver
+from app.retrieval.ingest import DocumentIngestionService
 
 logger = structlog.get_logger(__name__)
 
@@ -109,6 +111,11 @@ async def _bootstrap_legacy_custom_injection(
             db_path=db_path,
             max_retries=max_retries,
         )
+    if getattr(application.state, "ingestion_service", None) is None and retriever is not None:
+        application.state.ingestion_service = DocumentIngestionService(
+            retriever=retriever,
+            semantic_cache=cache,
+        )
 
 
 @asynccontextmanager
@@ -147,6 +154,7 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
             application.state.semantic_cache = owned_container.semantic_cache
             application.state.checkpointer = owned_container.checkpointer
             application.state.workflow = owned_container.workflow
+            application.state.ingestion_service = owned_container.ingestion_service
 
         vram_after_mb = sample_cuda_vram_mb()
         vram_delta_mb = round(max(0.0, vram_after_mb - vram_before_mb), 2)
@@ -206,6 +214,7 @@ def create_app(
     application.state.checkpoint_db = Path(checkpoint_db) if checkpoint_db is not None else None
     application.state.testing = testing
     application.state.container = None
+    application.state.ingestion_service = None
 
     application.add_middleware(
         CORSMiddleware,
@@ -229,6 +238,7 @@ def create_app(
         )
 
     application.include_router(chat_v1_router)
+    application.include_router(ingest_v1_router)
     return application
 
 

@@ -393,6 +393,29 @@ async def offline_simulated_runner(
 class LoadTestRetriever:
     """Async retriever adapter simulating Qdrant INT8 + RRF + FP16 rerank latency."""
 
+    def __init__(self) -> None:
+        self._extra_chunks: list[RetrievedChunk] = []
+
+    async def add_chunks(self, chunks: Sequence[Any]) -> int:
+        count = 0
+        for item in chunks:
+            if isinstance(item, RetrievedChunk):
+                self._extra_chunks.append(item)
+            else:
+                self._extra_chunks.append(
+                    RetrievedChunk(
+                        text=str(item.text),
+                        metadata=item.metadata,
+                        score=0.9,
+                        rank=len(self._extra_chunks),
+                    )
+                )
+            count += 1
+        return count
+
+    def count_chunks(self) -> int:
+        return 2 + len(self._extra_chunks)
+
     async def search(
         self,
         query: str,

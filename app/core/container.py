@@ -44,6 +44,7 @@ from app.retrieval.hybrid_store import (
     BM25SparseEmbedder,
     HybridVectorStore,
 )
+from app.retrieval.ingest import DocumentIngestionService
 
 try:
     import torch
@@ -173,6 +174,7 @@ class ServiceContainer:
         self.retriever: RetrieverPort | None = None
         self.router: LLMRouterPort | None = None
         self.semantic_cache: SemanticCachePort | None = None
+        self.ingestion_service: DocumentIngestionService | None = None
         self.workflow: AgenticRAGWorkflow | None = None
         self.checkpointer: Any = None
         self.component_status: dict[str, str] = {}
@@ -251,11 +253,16 @@ class ServiceContainer:
         checkpoint_target = self._resolve_checkpoint_target(mode)
         self.checkpointer = await self._open_checkpointer(checkpoint_target)
         self.workflow = self._compile_workflow(checkpoint_target)
+        self.ingestion_service = DocumentIngestionService(
+            retriever=self.retriever,
+            semantic_cache=self.semantic_cache,
+        )
         self.component_status = {
             "runtime_mode": mode,
             "retriever": f"ready ({mode})",
             "router": f"ready ({mode})",
             "semantic_cache": f"ready ({mode})",
+            "ingestion": f"ready ({mode})",
             "workflow": f"ready ({mode})",
             "checkpointer": f"ready ({mode})",
         }
@@ -365,11 +372,17 @@ class ServiceContainer:
         checkpoint_target = self._resolve_checkpoint_target("live")
         self.checkpointer = await self._open_checkpointer(checkpoint_target)
         self.workflow = self._compile_workflow(checkpoint_target)
+        assert self.retriever is not None
+        self.ingestion_service = DocumentIngestionService(
+            retriever=self.retriever,
+            semantic_cache=self.semantic_cache,
+        )
         self.component_status = {
             "runtime_mode": "live",
             "retriever": retriever_status,
             "router": router_status,
             "semantic_cache": cache_status,
+            "ingestion": "ready (live)",
             "workflow": "ready (live)",
             "checkpointer": "ready (live)",
         }
@@ -441,6 +454,7 @@ class ServiceContainer:
 
         self.checkpointer = None
         self.workflow = None
+        self.ingestion_service = None
         self._initialized = False
 
 
