@@ -11,6 +11,14 @@ from evals.dataset_gen import (
     load_dataset_jsonl,
     save_dataset_jsonl,
 )
+from evals.load_test import (
+    AsyncLoadTester,
+    LoadTestSummary,
+    RequestLatencyRecord,
+    generate_benchmark_report_markdown,
+    save_benchmark_report,
+    save_load_test_results,
+)
 from evals.run_ragas import (
     PIPELINE_VERSIONS,
     PipelineEvalSummary,
@@ -27,13 +35,16 @@ from evals.run_ragas import (
 
 __all__ = [
     "PIPELINE_VERSIONS",
+    "AsyncLoadTester",
     "EvalSample",
     "GeneratedQAPair",
     "HopType",
+    "LoadTestSummary",
     "PipelineEvalSummary",
     "PipelineVersion",
     "RagasComparisonReport",
     "RagasPipelineEvaluator",
+    "RequestLatencyRecord",
     "SampleEvalRecord",
     "SyntheticDatasetGenerator",
     "aload_dataset_jsonl",
@@ -41,9 +52,12 @@ __all__ = [
     "build_offline_dataset",
     "build_ragas_metrics",
     "build_ragas_run_config",
+    "generate_benchmark_report_markdown",
     "heuristic_ragas_scorer",
     "load_comparison_report",
     "load_dataset_jsonl",
+    "save_benchmark_report",
     "save_comparison_report",
     "save_dataset_jsonl",
+    "save_load_test_results",
 ]
