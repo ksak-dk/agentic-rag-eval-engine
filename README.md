@@ -1,5 +1,11 @@
 # agentic-rag-eval-engine
 
+<div align="center">
+
+[**简体中文**](README.md) | [English](README.en.md) | [한국어](README.ko.md)
+
+</div>
+
 [![CI](https://github.com/ksak-dk/agentic-rag-eval-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/ksak-dk/agentic-rag-eval-engine/actions/workflows/ci.yml)
 ![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-Dual--Channel%20SSE-009688?logo=fastapi&logoColor=white)
@@ -245,7 +251,9 @@ agentic-rag-eval-engine/
 ├── docker-compose.yml              # Qdrant + Redis 8 (+ 可选 Langfuse/Postgres 16)
 ├── pyproject.toml                  # uv + PyTorch cu124 + Ruff + Pytest 项目配置
 ├── GEMINI.md                       # 硬件约束、架构红线与自动交接规范
-└── README.md                       # 项目工程门面与量化基准文档
+├── README.md                       # 项目工程门面与量化基准文档（简体中文）
+├── README.en.md                    # 英文版自述文档 (English README)
+└── README.ko.md                    # 韩语版自述文档 (한국어 README)
 ```
 
 ---
