@@ -28,6 +28,11 @@ from uuid import uuid4
 import structlog
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
+from app.adapters.mock.eval_heuristics import (
+    build_offline_sample_dicts,
+    select_multi_hop_candidates,
+    select_single_hop_candidates,
+)
 from app.core.config import Settings, get_settings
 from app.core.router import LLMRouter, RouteTier, TaskType
 from app.retrieval.chunker import DocumentChunk, make_chunker
@@ -186,71 +191,8 @@ def _build_multi_hop_messages(chunks: Sequence[DocumentChunk]) -> list[tuple[str
     ]
 
 
-def _select_single_hop_candidates(
-    chunks: Sequence[DocumentChunk],
-    count: int,
-    rng: random.Random,
-) -> list[DocumentChunk]:
-    eligible = [chunk for chunk in chunks if len(chunk.text.strip()) >= 20]
-    if not eligible or count <= 0:
-        return []
-    ordered = list(eligible)
-    rng.shuffle(ordered)
-    if count <= len(ordered):
-        return ordered[:count]
-    selected: list[DocumentChunk] = []
-    while len(selected) < count:
-        selected.extend(ordered)
-    return selected[:count]
-
-
-def _select_multi_hop_candidates(
-    chunks: Sequence[DocumentChunk],
-    count: int,
-    rng: random.Random,
-    *,
-    chunks_per_group: int = 2,
-) -> list[list[DocumentChunk]]:
-    eligible = [chunk for chunk in chunks if len(chunk.text.strip()) >= 20]
-    if len(eligible) < 2 or count <= 0:
-        return []
-
-    group_size = max(2, min(chunks_per_group, len(eligible)))
-    cross_doc_pairs: list[list[DocumentChunk]] = []
-    same_doc_pairs: list[list[DocumentChunk]] = []
-
-    for i in range(len(eligible)):
-        for j in range(i + 1, len(eligible)):
-            first, second = eligible[i], eligible[j]
-            if first.metadata.doc_id != second.metadata.doc_id:
-                cross_doc_pairs.append([first, second])
-            elif first.metadata.section_path != second.metadata.section_path or (
-                abs(first.metadata.chunk_index - second.metadata.chunk_index) > 1
-            ):
-                same_doc_pairs.append([first, second])
-
-    rng.shuffle(cross_doc_pairs)
-    rng.shuffle(same_doc_pairs)
-    pool = cross_doc_pairs + same_doc_pairs
-
-    if not pool:
-        # Fallback when only two adjacent chunks from the same section exist.
-        pool = [[eligible[i], eligible[(i + 1) % len(eligible)]] for i in range(len(eligible) - 1)]
-
-    if group_size > 2 and len(eligible) >= group_size:
-        expanded: list[list[DocumentChunk]] = []
-        for pair in pool:
-            extras = [c for c in eligible if c not in pair]
-            rng.shuffle(extras)
-            expanded.append([*pair, *extras[: group_size - 2]])
-        pool = expanded
-
-    if count <= len(pool):
-        return pool[:count]
-    selected: list[list[DocumentChunk]] = []
-    while len(selected) < count:
-        selected.extend(pool)
-    return selected[:count]
+_select_single_hop_candidates = select_single_hop_candidates
+_select_multi_hop_candidates = select_multi_hop_candidates
 
 
 # ---------------------------------------------------------------------------
@@ -312,42 +254,13 @@ def build_offline_dataset(
     seed: int = 42,
 ) -> list[EvalSample]:
     """Deterministically construct offline ``EvalSample`` items without any LLM call."""
-    rng = random.Random(seed)
-    samples: list[EvalSample] = []
-
-    for idx, chunk in enumerate(_select_single_hop_candidates(chunks, single_hop_count, rng)):
-        topic = " > ".join(chunk.metadata.section_path) or chunk.metadata.source
-        snippet = chunk.text.strip()
-        samples.append(
-            EvalSample(
-                sample_id=f"offline-single-{idx}",
-                question=f"What does {topic} specify in document {chunk.metadata.doc_id}?",
-                ground_truth=snippet[:240],
-                reference_contexts=[snippet],
-                hop_type="single_hop",
-                source_doc_ids=[chunk.metadata.doc_id],
-            )
-        )
-
-    for idx, group in enumerate(_select_multi_hop_candidates(chunks, multi_hop_count, rng)):
-        doc_ids = [c.metadata.doc_id for c in group]
-        contexts = [c.text.strip() for c in group]
-        combined_truth = " ".join(c.text.strip()[:120] for c in group)
-        samples.append(
-            EvalSample(
-                sample_id=f"offline-multi-{idx}",
-                question=(
-                    f"How do the specifications in {' and '.join(dict.fromkeys(doc_ids))} "
-                    "relate to each other?"
-                ),
-                ground_truth=combined_truth,
-                reference_contexts=contexts,
-                hop_type="multi_hop",
-                source_doc_ids=doc_ids,
-            )
-        )
-
-    return samples
+    raw_samples = build_offline_sample_dicts(
+        chunks,
+        single_hop_count=single_hop_count,
+        multi_hop_count=multi_hop_count,
+        seed=seed,
+    )
+    return [EvalSample.model_validate(item) for item in raw_samples]
 
 
 def load_chunks_from_paths(

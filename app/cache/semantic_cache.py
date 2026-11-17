@@ -274,6 +274,7 @@ class SemanticCache:
             else VectorIndexAlgorithm(algorithm.strip().upper())
         )
         self._index_ready = False
+        self.singleflight = SingleFlight()
 
     @classmethod
     def from_url(

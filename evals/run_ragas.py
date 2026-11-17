@@ -19,8 +19,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import math
-import re
 import time
 from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime
@@ -38,6 +36,12 @@ from ragas.metrics import (
 )
 from ragas.run_config import RunConfig
 
+from app.adapters.mock.eval_heuristics import (
+    clamp_score,
+    compute_percentile,
+    heuristic_ragas_scorer,
+    offline_simulated_runner,
+)
 from app.core.config import Settings, get_settings
 from app.core.router import LLMRouter, RouteTier, TaskType
 from app.graph.nodes import GraphDependencies, _format_context_block
@@ -50,8 +54,6 @@ PipelineVersion = Literal["v1", "v2", "v3"]
 PIPELINE_VERSIONS: tuple[PipelineVersion, ...] = ("v1", "v2", "v3")
 DEFAULT_DATASET_PATH: Path = Path("./data/eval_dataset.jsonl")
 DEFAULT_RESULTS_PATH: Path = Path("./data/ragas_eval_results.json")
-
-_WORD_RE: re.Pattern[str] = re.compile(r"[a-zA-Z0-9_\u4e00-\u9fff]+")
 
 PipelineRunner = Callable[[EvalSample, PipelineVersion], Awaitable[dict[str, Any]]]
 SampleScorer = Callable[[SingleTurnSample, PipelineVersion], Awaitable[dict[str, float]]]
@@ -206,165 +208,9 @@ def _try_get_settings() -> Settings | None:
         return None
 
 
-def _clamp_score(raw: Any) -> float:
-    if raw is None:
-        return 0.0
-    try:
-        val = float(raw)
-    except (TypeError, ValueError):
-        return 0.0
-    if math.isnan(val) or math.isinf(val):
-        return 0.0
-    return round(max(0.0, min(1.0, val)), 4)
-
-
-def _compute_percentile(values: Sequence[float], percentile: float) -> float:
-    if not values:
-        return 0.0
-    ordered = sorted(float(v) for v in values)
-    if len(ordered) == 1:
-        return round(ordered[0], 2)
-    pos = (len(ordered) - 1) * (percentile / 100.0)
-    lo = math.floor(pos)
-    hi = math.ceil(pos)
-    if lo == hi:
-        return round(ordered[lo], 2)
-    interpolated = ordered[lo] + (ordered[hi] - ordered[lo]) * (pos - lo)
-    return round(interpolated, 2)
-
-
-def _tokenize(text: str) -> set[str]:
-    return {tok.lower() for tok in _WORD_RE.findall(text) if tok}
-
-
-def _truncate_words(text: str, ratio: float) -> str:
-    words = text.split()
-    if not words:
-        return ""
-    keep = max(1, math.floor(len(words) * ratio))
-    return " ".join(words[:keep])
-
-
-async def heuristic_ragas_scorer(
-    sample: SingleTurnSample,
-    pipeline_version: PipelineVersion,
-) -> dict[str, float]:
-    """Deterministic lexical scorer mimicking Ragas metrics for offline testing."""
-    _ = pipeline_version
-    retrieved_list = list(sample.retrieved_contexts or [])
-    reference_list = list(sample.reference_contexts or [])
-    if not reference_list and sample.reference:
-        reference_list = [sample.reference]
-
-    retrieved_union: set[str] = set()
-    for ctx in retrieved_list:
-        retrieved_union.update(_tokenize(ctx))
-
-    ref_union: set[str] = set()
-    for ref in reference_list:
-        ref_union.update(_tokenize(ref))
-
-    # 1. Context Recall: reference coverage in retrieved contexts
-    if not reference_list or not retrieved_union:
-        context_recall = 0.0
-    else:
-        recalls: list[float] = []
-        for ref in reference_list:
-            ref_tokens = _tokenize(ref)
-            if not ref_tokens:
-                continue
-            recalls.append(len(ref_tokens & retrieved_union) / len(ref_tokens))
-        context_recall = sum(recalls) / len(recalls) if recalls else 0.0
-
-    # 2. Faithfulness: response grounding in retrieved contexts
-    resp_tokens = _tokenize(sample.response or "")
-    if not resp_tokens or not retrieved_union:
-        faithfulness = 0.0
-    else:
-        faithfulness = len(resp_tokens & retrieved_union) / len(resp_tokens)
-
-    # 3. Context Precision: rank-weighted relevance of retrieved contexts
-    if not retrieved_list or not ref_union:
-        context_precision = 0.0
-    else:
-        weighted_hits = 0.0
-        relevant_count = 0
-        for rank_idx, ctx in enumerate(retrieved_list):
-            ctx_tokens = _tokenize(ctx)
-            if not ctx_tokens:
-                continue
-            overlap_ratio = len(ctx_tokens & ref_union) / len(ctx_tokens)
-            if overlap_ratio >= 0.35:
-                relevant_count += 1
-                weighted_hits += relevant_count / (rank_idx + 1)
-        context_precision = weighted_hits / relevant_count if relevant_count > 0 else 0.0
-
-    return {
-        "context_recall": _clamp_score(context_recall),
-        "faithfulness": _clamp_score(faithfulness),
-        "context_precision": _clamp_score(context_precision),
-    }
-
-
-async def _offline_simulated_runner(
-    sample: EvalSample,
-    pipeline_version: PipelineVersion,
-) -> dict[str, Any]:
-    """Deterministic offline runner modeling v1 < v2 < v3 retrieval & grounding gains."""
-    ref_contexts = list(sample.reference_contexts)
-    first_ctx = ref_contexts[0] if ref_contexts else ""
-
-    if pipeline_version == "v1":
-        # Fixed chunking + dense only: truncated first context + distractor + ungrounded tail
-        retrieved = [
-            _truncate_words(first_ctx, 0.45),
-            "Legacy system telemetry note unrelated to vector index quantization.",
-        ]
-        answer = (
-            f"{_truncate_words(sample.ground_truth, 0.65)} "
-            "Additionally unverified legacy defaults apply indefinitely."
-        )
-        return {
-            "answer": answer.strip(),
-            "retrieved_contexts": [c for c in retrieved if c],
-            "latency_ms": 410.0,
-            "ttft_ms": 135.0,
-            "rewrite_count": 0,
-            "cache_hit": False,
-        }
-
-    if pipeline_version == "v2":
-        # Semantic chunking + hybrid RRF + rerank: full first chunk, misses 2nd hop if multi_hop
-        if len(ref_contexts) >= 2:
-            retrieved = [
-                first_ctx,
-                "General overview paragraph without secondary hop details.",
-            ]
-            answer = _truncate_words(sample.ground_truth, 0.8)
-        else:
-            retrieved = [
-                first_ctx,
-                "Secondary non-essential documentation note.",
-            ]
-            answer = sample.ground_truth
-        return {
-            "answer": answer.strip(),
-            "retrieved_contexts": retrieved,
-            "latency_ms": 680.0,
-            "ttft_ms": 185.0,
-            "rewrite_count": 0,
-            "cache_hit": False,
-        }
-
-    # v3: Agentic LangGraph loop + query rewrite on multi-hop + hallucination verification
-    return {
-        "answer": sample.ground_truth,
-        "retrieved_contexts": ref_contexts,
-        "latency_ms": 940.0 if sample.hop_type == "multi_hop" else 760.0,
-        "ttft_ms": 215.0,
-        "rewrite_count": 1 if sample.hop_type == "multi_hop" else 0,
-        "cache_hit": False,
-    }
+_clamp_score = clamp_score
+_compute_percentile = compute_percentile
+_offline_simulated_runner = offline_simulated_runner
 
 
 def _aggregate_pipeline_summary(

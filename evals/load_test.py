@@ -20,7 +20,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import math
 import os
 import tempfile
 import time
@@ -28,23 +27,24 @@ import uuid
 from collections.abc import AsyncIterator, Mapping, Sequence
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
 
 import httpx
 import structlog
 from fastapi import FastAPI
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.cache.semantic_cache import CachedResponse
-from app.core.config import LogLevel, Settings
-from app.core.config import PipelineVersion as ConfigPipelineVersion
-from app.core.router import LLMGenerationResult, RouteDecision, RouteTier, TaskType
-from app.graph.nodes import DocumentGradeOutput, HallucinationGradeOutput
+from app.adapters.mock.eval_heuristics import (
+    BENCHMARK_CORPUS,
+    DEFAULT_LOAD_TEST_QUERIES,
+    LoadTestRetriever,
+    LoadTestRouter,
+    LoadTestSemanticCache,
+    build_mock_load_test_app,
+    compute_percentile,
+)
 from app.graph.workflow import open_async_sqlite_saver
-from app.main import create_app
-from app.retrieval.chunker import ChunkMetadata, make_chunker
-from app.retrieval.hybrid_store import RetrievedChunk
-from evals.dataset_gen import build_offline_dataset, load_dataset_jsonl
+from app.retrieval.chunker import make_chunker
+from evals.dataset_gen import EvalSample, build_offline_dataset, load_dataset_jsonl
 from evals.run_ragas import (
     DEFAULT_DATASET_PATH,
     PIPELINE_VERSIONS,
@@ -59,45 +59,8 @@ DEFAULT_BENCHMARK_JSON_PATH: Path = Path("./data/load_test_results.json")
 DEFAULT_BENCHMARK_REPORT_PATH: Path = Path("./evals/benchmark_report.md")
 SLA_P95_LATENCY_MS: float = 1800.0
 
-_DEFAULT_QUERIES: tuple[str, ...] = (
-    "How does Qdrant INT8 quantization reduce memory footprint?",
-    "How are dense bge-m3 and sparse BM25 vectors fused via RRF?",
-    "Why does bge-reranker-v2-m3 run in FP16 on RTX 3060?",
-    "How does LangGraph enforce max_retries=2 on irrelevant documents?",
-    "How does Redis 8 semantic cache isolate v1, v2, and v3 namespaces?",
-    "What triggers Groq to Gemini Flash-Lite automatic fallback?",
-    "How does AsyncSqliteSaver persist LangGraph conversation checkpoints?",
-    "What SSE event channels does /api/v1/chat emit in streaming mode?",
-)
-
-_BENCHMARK_CORPUS: tuple[tuple[str, str, str], ...] = (
-    (
-        "doc-qdrant",
-        "docs/retrieval.md",
-        "# Hybrid Vector Retrieval\n\n"
-        "Qdrant stores 1024-dimensional BAAI/bge-m3 dense vectors with INT8 scalar "
-        "quantization (always_ram=True) alongside in-memory BM25 sparse vectors. "
-        "Prefetch top-20 dense and sparse candidates are merged via server-side "
-        "Fusion.RRF and reranked in FP16 by BAAI/bge-reranker-v2-m3 to top-5 chunks.",
-    ),
-    (
-        "doc-langgraph",
-        "docs/orchestration.md",
-        "# Self-Correcting LangGraph Workflow\n\n"
-        "LangGraph StateGraph executes Redis 8 semantic cache lookup (cosine >= 0.92), "
-        "fast-vs-strong routing, hybrid retrieval, document relevance grading, bounded "
-        "query rewriting (max_retries=2), strong generation with [doc_id] citations, "
-        "and faithfulness verification persisted via AsyncSqliteSaver.",
-    ),
-    (
-        "doc-serving",
-        "docs/serving.md",
-        "# Dual-Channel FastAPI SSE Serving\n\n"
-        "FastAPI exposes /api/v1/chat over sse-starlette EventSourceResponse, streaming "
-        "token events on the text channel followed by structured citations, "
-        "RequestMetrics telemetry, and done events within a P95 < 1.8s latency target.",
-    ),
-)
+_DEFAULT_QUERIES = DEFAULT_LOAD_TEST_QUERIES
+_BENCHMARK_CORPUS = BENCHMARK_CORPUS
 
 
 # ---------------------------------------------------------------------------
@@ -141,175 +104,14 @@ class LoadTestSummary(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Internal Mock ASGI Runtime (for MOCK_LLM_STREAM=true load validation)
+# Mock ASGI Runtime Aliases (Delegated to app.adapters.mock.eval_heuristics)
 # ---------------------------------------------------------------------------
 
-
-class _LoadTestRetriever:
-    """Async retriever stub simulating Qdrant INT8 + RRF + FP16 rerank latency."""
-
-    async def search(
-        self,
-        query: str,
-        pipeline_version: str = "v3",
-        top_k: int = 5,
-        top_n: int = 20,
-    ) -> list[RetrievedChunk]:
-        _ = (query, top_n)
-        await asyncio.sleep(0.005 if pipeline_version == "v1" else 0.012)
-        chunks = [
-            RetrievedChunk(
-                text=(
-                    "Qdrant fuses 1024-dim INT8 dense vectors and BM25 sparse vectors via RRF "
-                    "before FP16 bge-reranker-v2-m3 scoring."
-                ),
-                metadata=ChunkMetadata(
-                    doc_id="doc-qdrant",
-                    source="docs/retrieval.md",
-                    section_path=["Hybrid Vector Retrieval"],
-                    chunk_index=0,
-                ),
-                score=0.95,
-                rank=0,
-            ),
-            RetrievedChunk(
-                text=(
-                    "LangGraph enforces max_retries=2 and persists checkpoints in "
-                    "AsyncSqliteSaver while Redis 8 caches cosine >= 0.92 hits."
-                ),
-                metadata=ChunkMetadata(
-                    doc_id="doc-langgraph",
-                    source="docs/orchestration.md",
-                    section_path=["Self-Correcting LangGraph Workflow"],
-                    chunk_index=0,
-                ),
-                score=0.91,
-                rank=1,
-            ),
-        ]
-        return chunks[:top_k]
-
-
-class _LoadTestSemanticCache:
-    """In-memory async semantic cache simulating Redis 8 HNSW lookup & TTL write."""
-
-    def __init__(self) -> None:
-        self._entries: dict[tuple[str, str], CachedResponse] = {}
-
-    async def get(self, query: str, *, namespace: str = "v3") -> CachedResponse | None:
-        await asyncio.sleep(0.0005)
-        return self._entries.get((namespace, query.strip()))
-
-    async def set(
-        self,
-        query: str,
-        response: str,
-        *,
-        namespace: str = "v3",
-        metadata: dict[str, Any] | None = None,
-    ) -> str:
-        await asyncio.sleep(0.0005)
-        cleaned = query.strip()
-        self._entries[(namespace, cleaned)] = CachedResponse(
-            query=cleaned,
-            response=response,
-            namespace=namespace,
-            similarity=0.99,
-            metadata=dict(metadata or {}),
-        )
-        return f"rag:cache:{namespace}:loadtest"
-
-
-class _LoadTestRouter:
-    """Deterministic async cloud LLM stub modeling fast/strong TTFT and streaming."""
-
-    def select_route(
-        self,
-        *,
-        task_type: TaskType | str | None = None,
-        query: str | None = None,
-        retry_count: int = 0,
-        force_tier: RouteTier | str | None = None,
-    ) -> RouteDecision:
-        _ = (task_type, query)
-        if force_tier == RouteTier.STRONG or retry_count > 0:
-            return RouteDecision(
-                tier=RouteTier.STRONG,
-                model_name="gemini-2.5-flash",
-                fallback_model_name=None,
-                reason="Load test strong route",
-            )
-        return RouteDecision(
-            tier=RouteTier.FAST,
-            model_name="llama-3.1-8b-instant",
-            fallback_model_name="gemini-2.5-flash-lite",
-            reason="Load test fast route",
-        )
-
-    async def ainvoke(
-        self,
-        messages: Any,
-        *,
-        task_type: TaskType | str | None = None,
-        force_tier: RouteTier | str | None = None,
-        retry_count: int = 0,
-        temperature: float = 0.0,
-    ) -> LLMGenerationResult:
-        _ = (messages, task_type, retry_count, temperature)
-        tier = force_tier if isinstance(force_tier, RouteTier) else RouteTier.STRONG
-        delay = 0.015 if tier == RouteTier.FAST else 0.022
-        await asyncio.sleep(delay)
-        return LLMGenerationResult(
-            content=(
-                "Hybrid retrieval combines INT8 dense and BM25 sparse vectors [doc-qdrant] "
-                "inside a bounded LangGraph workflow [doc-langgraph]."
-            ),
-            route_tier=tier,
-            model_name=("llama-3.1-8b-instant" if tier == RouteTier.FAST else "gemini-2.5-flash"),
-            mocked=True,
-            ttft_ms=round(delay * 1000.0, 2),
-            latency_ms=round(delay * 1000.0, 2),
-            prompt_tokens=64,
-            completion_tokens=24,
-        )
-
-    async def astream(
-        self,
-        messages: Any,
-        *,
-        task_type: TaskType | str | None = None,
-        force_tier: RouteTier | str | None = None,
-        retry_count: int = 0,
-        temperature: float = 0.0,
-    ) -> AsyncIterator[str]:
-        _ = (messages, task_type, retry_count, temperature)
-        tier = force_tier if isinstance(force_tier, RouteTier) else RouteTier.STRONG
-        await asyncio.sleep(0.012 if tier == RouteTier.FAST else 0.018)
-        for token in (
-            "Hybrid retrieval combines ",
-            "INT8 dense and BM25 sparse vectors [doc-qdrant] ",
-            "inside a bounded LangGraph workflow [doc-langgraph].",
-        ):
-            yield token
-            await asyncio.sleep(0.002)
-
-    async def ainvoke_structured(
-        self,
-        schema: type[Any],
-        messages: Any,
-        *,
-        task_type: TaskType | str | None = None,
-        force_tier: RouteTier | str | None = None,
-        retry_count: int = 0,
-        temperature: float = 0.0,
-    ) -> Any:
-        _ = (messages, task_type, force_tier, retry_count, temperature)
-        await asyncio.sleep(0.002)
-        if schema is DocumentGradeOutput:
-            return DocumentGradeOutput(relevant=True, reason="Mock relevant chunk")
-        if schema is HallucinationGradeOutput:
-            return HallucinationGradeOutput(grounded=True, reason="Mock grounded answer")
-        return schema.model_validate({})
+_LoadTestRetriever = LoadTestRetriever
+_LoadTestSemanticCache = LoadTestSemanticCache
+_LoadTestRouter = LoadTestRouter
+_build_mock_asgi_app = build_mock_load_test_app
+_compute_percentile = compute_percentile
 
 
 def _resolve_mock_flag(mock_llm_stream: bool | None) -> bool:
@@ -317,46 +119,6 @@ def _resolve_mock_flag(mock_llm_stream: bool | None) -> bool:
         return bool(mock_llm_stream)
     raw = os.getenv("MOCK_LLM_STREAM", "true").strip().lower()
     return raw in {"1", "true", "yes", "on"}
-
-
-def _build_mock_asgi_app(
-    *,
-    checkpoint_db: Path,
-    checkpointer: Any | None = None,
-    mock_llm_stream: bool = True,
-) -> FastAPI:
-    settings = Settings(
-        groq_api_key="load-test-groq-key",
-        google_api_key="load-test-google-key",
-        pipeline_version=ConfigPipelineVersion.V3,
-        mock_llm_stream=mock_llm_stream,
-        langgraph_checkpoint_db=checkpoint_db,
-        log_level=LogLevel.WARNING,
-    )
-    return create_app(
-        settings=settings,
-        retriever=_LoadTestRetriever(),
-        router=_LoadTestRouter(),
-        cache=_LoadTestSemanticCache(),
-        checkpointer=checkpointer,
-        checkpoint_db=checkpoint_db,
-        testing=True,
-    )
-
-
-def _compute_percentile(values: Sequence[float], percentile: float) -> float:
-    if not values:
-        return 0.0
-    ordered = sorted(float(v) for v in values)
-    if len(ordered) == 1:
-        return round(ordered[0], 2)
-    pos = (len(ordered) - 1) * (percentile / 100.0)
-    lo = math.floor(pos)
-    hi = math.ceil(pos)
-    if lo == hi:
-        return round(ordered[lo], 2)
-    interpolated = ordered[lo] + (ordered[hi] - ordered[lo]) * (pos - lo)
-    return round(interpolated, 2)
 
 
 # ---------------------------------------------------------------------------
@@ -901,7 +663,7 @@ def save_benchmark_report(
 # ---------------------------------------------------------------------------
 
 
-def _build_default_eval_samples() -> list[Any]:
+def _build_default_eval_samples() -> list[EvalSample]:
     chunker = make_chunker("v3")
     chunks = []
     for doc_id, source, text in _BENCHMARK_CORPUS:
