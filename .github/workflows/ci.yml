@@ -1,69 +1,53 @@
-name: CI — Ruff Lint + Mock Pytest
+name: CI — Ruff Lint & Offline Pytest
 
 on:
   push:
-    branches: ["main", "feat/**", "fix/**", "eval/**"]
+    branches:
+      - main
+      - "feat/**"
   pull_request:
-    branches: ["main"]
+    branches:
+      - main
 
 env:
   PYTHON_VERSION: "3.11"
 
 jobs:
-  lint:
-    name: Ruff Lint & Format Check
+  ci:
+    name: Ruff & Offline Pytest (Ubuntu / Python 3.11)
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-        with:
-          enable-cache: true
-
-      - name: Install dependencies (no extras)
-        run: uv sync --no-dev --group lint
-
-      - name: Ruff check
-        run: uv run ruff check . --output-format=github
-
-      - name: Ruff format check
-        run: uv run ruff format --check .
-
-  test:
-    name: Mock Pytest (no GPU / no external API)
-    runs-on: ubuntu-latest
-    needs: lint
     env:
-      # Force all GPU/API calls to mock mode in CI
       MOCK_LLM_STREAM: "true"
       PIPELINE_VERSION: "v3"
-      GROQ_API_KEY: "ci-mock-key"
-      GOOGLE_API_KEY: "ci-mock-key"
+      GROQ_API_KEY: "ci-mock-groq-key"
+      GOOGLE_API_KEY: "ci-mock-google-key"
       QDRANT_URL: "http://localhost:6333"
       REDIS_URL: "redis://localhost:6379"
       LOG_LEVEL: "WARNING"
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install uv
+      - name: Install uv with cache
         uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
 
       - name: Install all dependencies
-        run: uv sync
+        run: uv sync --all-extras --dev
 
-      - name: Run tests (mocked, no GPU)
-        run: uv run pytest tests/ -x --no-header -q --tb=short
+      - name: Ruff lint check
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      - name: Run full offline test suite
+        run: uv run pytest -v
