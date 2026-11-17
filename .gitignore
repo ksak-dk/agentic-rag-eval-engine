@@ -79,3 +79,6 @@ docker-compose.override.yml
 
 # --- Benchmark Reports (generated) ---
 evals/benchmark_report.md
+
+# --- Automated Session Handover (generated locally) ---
+HANDOVER.md

@@ -50,3 +50,4 @@ Target: **P95 latency < 1.8 s** end-to-end.
 - Conventional Commits: `feat(scope):`, `fix(scope):`, `eval(scope):`, `chore(scope):`, `test(scope):`.
 - **Never** run `git push --force` or `git reset --hard` without explicit user confirmation.
 - Commit after each validated module.
+- After every `git commit`, overwrite root `HANDOVER.md` (gitignored) with `git log -n 3 --oneline`, `git status`, ruff/pytest results, key classes & function signatures of new modules, and next-stage handover notes.

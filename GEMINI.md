@@ -102,3 +102,15 @@ Each module is accepted when:
 - [ ] `uv run pytest tests/ -x --no-header -q` → all pass (mocked GPU/API where needed)
 - [ ] Structured log emitted on startup with VRAM delta (GPU modules)
 - [ ] `git commit` archived with Conventional Commits message
+- [ ] `HANDOVER.md` overwritten and updated after commit
+
+---
+
+## 8. 自动交接协议 (Automated Handover Protocol)
+
+每次执行 `git commit` 后，**必须**立即覆盖更新根目录的 `HANDOVER.md`（已被 `.gitignore` 忽略，严禁提交到 Git），确保内容包含以下 4 项交接要素：
+
+1. **最新 Git 状态**：`git log -n 3 --oneline` 与 `git status` 实际输出。
+2. **质量门禁结果**：`uv run ruff check .` 与 `uv run pytest` 的实际执行汇总与通过状态。
+3. **新增/修改模块接口摘要**：本次及近期新增模块的关键类（Class）与公开函数签名（Function Signatures）。
+4. **下一阶段衔接点**：明确下一步待开发模块、依赖契约与注意事项。
