@@ -12,10 +12,15 @@ on:
 env:
   PYTHON_VERSION: "3.11"
 
+permissions:
+  contents: write
+
 jobs:
   ci:
     name: Ruff & Offline Pytest (Ubuntu / Python 3.11)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     env:
       MOCK_LLM_STREAM: "true"
@@ -51,3 +56,113 @@ jobs:
 
       - name: Run full offline test suite
         run: uv run pytest -v
+
+  release:
+    name: Zero-Conflict Semantic Tag & GitHub Release
+    needs: [ci]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository with full history & tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute next semantic version tag
+        id: semver
+        run: |
+          git fetch --tags --force
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import re
+          import subprocess
+
+          def run(cmd: list[str]) -> str:
+              return subprocess.check_output(cmd, text=True).strip()
+
+          head_tags = [
+              t for t in run(["git", "tag", "--points-at", "HEAD", "--list", "v[0-9]*.[0-9]*.[0-9]*"]).splitlines()
+              if t.strip()
+          ]
+          if head_tags:
+              print(f"should_release=false")
+              print(f"reason=HEAD already tagged ({', '.join(head_tags)})")
+              raise SystemExit(0)
+
+          commit_msg = run(["git", "log", "-1", "--pretty=%B"])
+          subject = commit_msg.splitlines()[0].strip() if commit_msg else ""
+
+          if "[skip release]" in commit_msg.lower():
+              print("should_release=false")
+              print("reason=Commit message contains [skip release]")
+              raise SystemExit(0)
+
+          bump = ""
+          if "BREAKING CHANGE" in commit_msg or re.match(r"^[a-z]+(\([^)]+\))?!:", subject):
+              bump = "major"
+          elif re.match(r"^feat(\([^)]+\))?:", subject):
+              bump = "minor"
+          elif re.match(r"^(fix|perf|refactor|build|docs)(\([^)]+\))?:", subject):
+              bump = "patch"
+          else:
+              print("should_release=false")
+              print(f"reason=Commit subject does not trigger release: {subject}")
+              raise SystemExit(0)
+
+          semver_re = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
+          versions: list[tuple[int, int, int]] = []
+          for tag in run(["git", "tag", "--list", "v[0-9]*.[0-9]*.[0-9]*"]).splitlines():
+              m = semver_re.match(tag.strip())
+              if m:
+                  versions.append((int(m.group(1)), int(m.group(2)), int(m.group(3))))
+
+          baseline = (2, 0, 1)
+          current = max(versions) if versions else baseline
+          if current < baseline:
+              current = baseline
+
+          major, minor, patch = current
+          if bump == "major":
+              next_ver = (major + 1, 0, 0)
+          elif bump == "minor":
+              next_ver = (major, minor + 1, 0)
+          else:
+              next_ver = (major, minor, patch + 1)
+
+          new_tag = f"v{next_ver[0]}.{next_ver[1]}.{next_ver[2]}"
+          existing = subprocess.run(
+              ["git", "rev-parse", "-q", "--verify", f"refs/tags/{new_tag}"],
+              capture_output=True,
+              text=True,
+          )
+          if existing.returncode == 0:
+              print("should_release=false")
+              print(f"reason=Tag {new_tag} already exists")
+              raise SystemExit(0)
+
+          print("should_release=true")
+          print(f"new_tag={new_tag}")
+          print(f"bump={bump}")
+          print(f"base_tag=v{current[0]}.{current[1]}.{current[2]}")
+          PY
+
+      - name: Create annotated Git tag and GitHub Release
+        if: steps.semver.outputs.should_release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEW_TAG: ${{ steps.semver.outputs.new_tag }}
+        run: |
+          if gh release view "$NEW_TAG" >/dev/null 2>&1; then
+            echo "Release $NEW_TAG already exists; skipping."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$NEW_TAG" -m "Release $NEW_TAG"
+          git push origin "refs/tags/$NEW_TAG"
+          gh release create "$NEW_TAG" \
+            --target main \
+            --title "$NEW_TAG" \
+            --generate-notes

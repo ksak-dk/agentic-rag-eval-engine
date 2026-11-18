@@ -18,7 +18,7 @@ resolution-markers = [
 
 [[package]]
 name = "agentic-rag-eval-engine"
-version = "0.1.0"
+version = "2.0.2"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },

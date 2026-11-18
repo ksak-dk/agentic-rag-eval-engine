@@ -108,6 +108,8 @@ Each module is accepted when:
 
 ## 8. 自动交接协议 (Automated Handover Protocol)
 
+- **Git Tag 与 GitHub Release 全自动托管**：所有语义化版本 Tag（`v*.*.*`）与正式 GitHub Release（含自动生成的 Commit Changelog）均由 GitHub Actions（`.github/workflows/ci.yml` 中的 `release` 作业）在 `push origin main` 且质量门禁（`ruff` + `pytest`）全部通过后全自动生成，且**不在 CI 中反向提交修改回 `main` 分支**。本地代理严禁手动创建本地版本 Tag（避免与远端产生冲突），只需严格按 Conventional Commits（`feat:` / `fix:` / `perf:` / `refactor:` / `build:` / `docs:` / `BREAKING CHANGE` / `!:`，或 `[skip release]` 跳过发版）提交并推送至 `origin main`；需要同步远端 Tag 时执行 `git fetch --tags --force` 即可。
+
 每次执行 `git commit` 后，**必须**立即覆盖更新根目录的 `HANDOVER.md`（已被 `.gitignore` 忽略，严禁提交到 Git），确保内容包含以下 4 项交接要素：
 
 1. **最新 Git 状态**：`git log -n 3 --oneline` 与 `git status` 实际输出。

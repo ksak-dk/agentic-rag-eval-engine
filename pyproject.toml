@@ -1,6 +1,6 @@
 [project]
 name = "agentic-rag-eval-engine"
-version = "0.1.0"
+version = "2.0.2"
 description = "Production-grade Agentic RAG pipeline with automated evaluation (v1/v2/v3)"
 readme = "README.md"
 requires-python = ">=3.11"
