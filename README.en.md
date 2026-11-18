@@ -192,6 +192,24 @@ uv run python scripts/demo_e2e.py --mode live --url http://127.0.0.1:8000
 
 Then open [tests/sse_viewer.html](tests/sse_viewer.html) in your browser to switch across `v1` / `v2` / `v3` and observe live **Token Answer Area**, **Citations Cards**, and **Metrics Telemetry Panel** updates in real time (ideal for live demos and screen recordings).
 
+### 4.3 Cloud Deployment (Render / Docker / Cloudflare Tunnel)
+
+- **Option A: One-Click Portfolio Dashboard on Render / Docker (512MB Free-Tier Ready)**
+  The repository includes a multi-stage lightweight [Dockerfile](Dockerfile) and Render Blueprint [render.yaml](render.yaml). Cloud builds install only lightweight runtime dependencies (omitting heavy CUDA `torch`, `sentence-transformers`, `fastembed`, and `ragas` packages), default to `RUNTIME_MODE=demo` listening on `0.0.0.0:$PORT`, and wire `/api/v1/health` as the health check:
+  ```bash
+  # Build and verify the lightweight cloud container locally
+  docker build -t agentic-rag-eval-engine:cloud .
+  docker run -p 8000:8000 -e RUNTIME_MODE=demo agentic-rag-eval-engine:cloud
+  ```
+  In Render, choose **New + → Blueprint** and connect this repository to deploy automatically via `render.yaml`. To enable cloud LLMs or managed vector/cache services, configure optional `GROQ_API_KEY`, `GOOGLE_API_KEY`, `QDRANT_URL`, and `REDIS_URL` with `RUNTIME_MODE=auto` or `live`.
+
+- **Option B: Expose Full Local RTX 3060 Live Stack via Cloudflare Tunnel**
+  To showcase local CUDA FP16 (`bge-m3` + `bge-reranker-v2-m3`) alongside Qdrant + Redis 8 during live interviews or demos, start the local live server and run:
+  ```bash
+  cloudflared tunnel --url http://127.0.0.1:8000
+  ```
+  This exposes an instant public HTTPS URL directly backed by your local dual-channel SSE dashboard.
+
 ---
 
 ## 5. Repository Structure
@@ -248,7 +266,10 @@ agentic-rag-eval-engine/
 │   ├── test_ports_and_adapters.py  # Hexagonal port contracts & mock/heuristic adapter unit tests
 │   ├── test_retrieval.py           # Chunker & hybrid retrieval protocol stub unit tests
 │   └── test_semantic_cache.py      # Redis 8 semantic cache similarity & Fail-Open unit tests
+├── .dockerignore                   # Cloud build context exclusions (preserves tests/sse_viewer.html)
+├── Dockerfile                      # Multi-stage lightweight image built with astral-sh/uv
 ├── docker-compose.yml              # Qdrant + Redis 8 (+ optional Langfuse/Postgres 16)
+├── render.yaml                     # Render Blueprint one-click deploy (RUNTIME_MODE=demo)
 ├── pyproject.toml                  # uv + PyTorch cu124 + Ruff + Pytest configuration
 ├── GEMINI.md                       # Hardware constraints, architecture rules & handover spec
 ├── README.md                       # Simplified Chinese README (简体中文)

@@ -1,0 +1,83 @@
+# =============================================================================
+# Agentic RAG Eval Engine — .dockerignore
+# Excludes local virtualenvs, Git metadata, caches, DBs, secrets, and heavy assets
+# while keeping tests/sse_viewer.html for the built-in portfolio dashboard.
+# =============================================================================
+
+# --- Virtual Environments & Python Artifacts ---
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.uv/
+
+# --- Git & CI ---
+.git/
+.gitignore
+.gitattributes
+.github/
+
+# --- Caches & Coverage ---
+.mypy_cache/
+.pyright/
+.ruff_cache/
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# --- Secrets & Local Env ---
+.env
+.env.*
+
+# --- Local Databases, Runtime Data & Logs ---
+data/
+qdrant_storage/
+redis_data/
+postgres_data/
+langfuse_data/
+*.db
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+logs/
+*.log
+*.jsonl
+
+# --- Model Weights & Heavy Artifacts ---
+models/
+hf_cache/
+*.safetensors
+*.bin
+*.pt
+*.onnx
+*.gguf
+*.ggml
+
+# --- Handover, IDE & OS ---
+HANDOVER.md
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# --- Non-runtime Dev / Eval / Compose Files ---
+docker-compose.yml
+docker-compose.override.yml
+evals/
+scripts/
+
+# --- Exclude Unit Tests but Preserve Dashboard UI ---
+tests/*
+!tests/sse_viewer.html

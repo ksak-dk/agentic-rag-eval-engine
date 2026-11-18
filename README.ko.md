@@ -192,6 +192,24 @@ uv run python scripts/demo_e2e.py --mode live --url http://127.0.0.1:8000
 
 이후 브라우저에서 [tests/sse_viewer.html](tests/sse_viewer.html)을 직접 열면 `v1` / `v2` / `v3`를 전환하며 **Token Answer Area**, **Citations Cards**, **Metrics Telemetry Panel** 3대 채널의 실시간 연동을 한눈에 확인할 수 있습니다 (라이브 데모 및 녹화에 최적화).
 
+### 4.3 클라우드 배포 — Cloud Deployment (Render / Docker / Cloudflare Tunnel)
+
+- **옵션 A: Render / Docker 기반 원클릭 포트폴리오 대시보드 배포 (512MB 무료 티어 최적화)**
+  저장소 루트의 경량 멀티스테이지 [Dockerfile](Dockerfile)과 Render Blueprint [render.yaml](render.yaml)을 통해 별도 GPU 없이도 즉시 배포할 수 있습니다. 클라우드 빌드에서는 무거운 CUDA `torch`·`sentence-transformers`·`fastembed`·`ragas` 패키지를 제외하고 경량 런타임 의존성만 설치하며, 기본 `RUNTIME_MODE=demo`로 `0.0.0.0:$PORT`에 바인딩하고 `/api/v1/health` 헬스 체크를 사용합니다:
+  ```bash
+  # 로컬에서 경량 클라우드 컨테이너 이미지 빌드 및 검증
+  docker build -t agentic-rag-eval-engine:cloud .
+  docker run -p 8000:8000 -e RUNTIME_MODE=demo agentic-rag-eval-engine:cloud
+  ```
+  Render 대시보드에서 **New + → Blueprint**로 저장소를 연결하면 `render.yaml`이 자동 반영됩니다. 클라우드 LLM이나 외부 벡터/캐시 DB를 연동하려면 선택 환경 변수(`GROQ_API_KEY`, `GOOGLE_API_KEY`, `QDRANT_URL`, `REDIS_URL`)를 설정하고 `RUNTIME_MODE=auto` 또는 `live`로 전환하세요.
+
+- **옵션 B: Cloudflare Tunnel로 로컬 RTX 3060 풀스펙 Live 환경 외부 공개**
+  기술 면접이나 라이브 시연에서 로컬 CUDA FP16(`bge-m3` + `bge-reranker-v2-m3`) 및 Qdrant + Redis 8 실시간 파이프라인을 그대로 공유하려면 로컬 라이브 서버 실행 후 아래 명령어를 실행하세요:
+  ```bash
+  cloudflared tunnel --url http://127.0.0.1:8000
+  ```
+  로컬 이중 채널 SSE 대시보드에 바로 연결되는 임시 공인 HTTPS URL이 생성됩니다.
+
 ---
 
 ## 5. 저장소 디렉토리 구조 (Repository Structure)
@@ -248,7 +266,10 @@ agentic-rag-eval-engine/
 │   ├── test_ports_and_adapters.py  # 헥사고날 포트 계약 및 오프라인/휴리스틱 어댑터 단위 테스트
 │   ├── test_retrieval.py           # 청커 및 하이브리드 검색 프로토콜 스텁 단위 테스트
 │   └── test_semantic_cache.py      # Redis 8 시맨틱 캐시 유사도 및 Fail-Open 단위 테스트
+├── .dockerignore                   # 클라우드 빌드 제외 목록 (tests/sse_viewer.html 대시보드 보존)
+├── Dockerfile                      # astral-sh/uv 기반 멀티스테이지 경량 클라우드 이미지
 ├── docker-compose.yml              # Qdrant + Redis 8 (+ 선택적 Langfuse/Postgres 16)
+├── render.yaml                     # Render Blueprint 원클릭 배포 설정 (RUNTIME_MODE=demo)
 ├── pyproject.toml                  # uv + PyTorch cu124 + Ruff + Pytest 프로젝트 설정
 ├── GEMINI.md                       # 하드웨어 제약, 아키텍처 기준선 및 자동 인수인계 규약
 ├── README.md                       # 중국어(간체) README (简体中文)

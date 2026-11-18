@@ -192,6 +192,24 @@ uv run python scripts/demo_e2e.py --mode live --url http://127.0.0.1:8000
 
 随后在浏览器直接打开 [tests/sse_viewer.html](tests/sse_viewer.html)，即可通过可视化界面分别切换 `v1` / `v2` / `v3` 实时观察 **Token Answer Area**、**Citations Cards** 与 **Metrics Telemetry Panel** 三大通道联动效果（非常适合联调演示与 GIF 录屏）。
 
+### 4.3 云端公网部署 — Cloud Deployment (Render / Docker / Cloudflare Tunnel)
+
+- **方案 A：Render / Docker 一键上线公网作品集看板（512MB 免费层友好）**
+  仓库根目录提供多阶段轻量级 [Dockerfile](Dockerfile) 与 Render Blueprint [render.yaml](render.yaml)。云端构建仅安装轻量推理/编排依赖（自动跳过 CUDA `torch`、`sentence-transformers` 等重型包），默认以 `RUNTIME_MODE=demo` 监听 `0.0.0.0:$PORT` 并配置 `/api/v1/health` 健康检查：
+  ```bash
+  # 本地构建并验证云端轻量容器镜像
+  docker build -t agentic-rag-eval-engine:cloud .
+  docker run -p 8000:8000 -e RUNTIME_MODE=demo agentic-rag-eval-engine:cloud
+  ```
+  在 Render 控制台选择 **New + → Blueprint** 导入仓库即可自动解析 `render.yaml` 上线；如需在云端接入真实 LLM / 托管向量库，只需补充可选环境变量 `GROQ_API_KEY`、`GOOGLE_API_KEY`、`QDRANT_URL`、`REDIS_URL` 并切换 `RUNTIME_MODE=auto` 或 `live`。
+
+- **方案 B：Cloudflare Tunnel 暴露本地 RTX 3060 满血 Live 环境**
+  当需要在远程面试或评审中展示本地 CUDA FP16（`bge-m3` + `bge-reranker-v2-m3`）与 Qdrant + Redis 8 完整实时链路时，启动本地实机服务后执行：
+  ```bash
+  cloudflared tunnel --url http://127.0.0.1:8000
+  ```
+  即可生成临时公网 HTTPS 地址，直接转发至本地双通道 SSE 交互看板。
+
 ---
 
 ## 5. 仓库目录结构 (Repository Structure)
@@ -248,7 +266,10 @@ agentic-rag-eval-engine/
 │   ├── test_ports_and_adapters.py  # 六边形端口契约与离线/启发式适配器单测
 │   ├── test_retrieval.py           # 分块器与混合检索协议桩单测
 │   └── test_semantic_cache.py      # Redis 8 语义缓存相似度与 Fail-Open 单测
+├── .dockerignore                   # 云端构建排除清单（保留 tests/sse_viewer.html 看板）
+├── Dockerfile                      # 基于 astral-sh/uv 的多阶段轻量云原生镜像
 ├── docker-compose.yml              # Qdrant + Redis 8 (+ 可选 Langfuse/Postgres 16)
+├── render.yaml                     # Render Blueprint 一键部署配置 (RUNTIME_MODE=demo)
 ├── pyproject.toml                  # uv + PyTorch cu124 + Ruff + Pytest 项目配置
 ├── GEMINI.md                       # 硬件约束、架构红线与自动交接规范
 ├── README.md                       # 项目工程门面与量化基准文档（简体中文）

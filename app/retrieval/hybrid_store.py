@@ -27,8 +27,6 @@ from collections.abc import Sequence
 from typing import Any, Protocol, runtime_checkable
 
 import structlog
-import torch
-from fastembed import SparseTextEmbedding
 from pydantic import BaseModel, ConfigDict, Field
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import (
@@ -46,9 +44,24 @@ from qdrant_client.models import (
     SparseVectorParams,
     VectorParams,
 )
-from sentence_transformers import CrossEncoder, SentenceTransformer
 
 from app.retrieval.chunker import ChunkMetadata, DocumentChunk
+
+try:
+    import torch
+except ImportError:  # pragma: no cover - defensive fallback for minimal cloud/CPU envs
+    torch = None  # type: ignore[assignment]
+
+try:
+    from fastembed import SparseTextEmbedding
+except ImportError:  # pragma: no cover - defensive fallback for minimal cloud/CPU envs
+    SparseTextEmbedding = None  # type: ignore[assignment,misc]
+
+try:
+    from sentence_transformers import CrossEncoder, SentenceTransformer
+except ImportError:  # pragma: no cover - defensive fallback for minimal cloud/CPU envs
+    CrossEncoder = None  # type: ignore[assignment,misc]
+    SentenceTransformer = None  # type: ignore[assignment,misc]
 
 logger = structlog.get_logger(__name__)
 
@@ -138,6 +151,11 @@ class BGEDenseEmbedder:
     """
 
     def __init__(self, model_name: str = "BAAI/bge-m3") -> None:
+        if torch is None or SentenceTransformer is None:
+            raise RuntimeError(
+                "torch and sentence-transformers are required for BGEDenseEmbedder. "
+                "Install full dependencies with `uv sync`."
+            )
         assert torch.cuda.is_available(), (
             "CUDA is required for BGEDenseEmbedder but is not available. "
             "Verify RTX 3060 drivers and CUDA 12.4 toolkit installation."
@@ -168,6 +186,8 @@ class BGEDenseEmbedder:
         return embeddings.tolist()  # type: ignore[union-attr]
 
     def get_vram_usage_mb(self) -> float:
+        if torch is None:
+            return 0.0
         return torch.cuda.memory_allocated() / 1024 / 1024
 
 
@@ -179,6 +199,11 @@ class BM25SparseEmbedder:
     """
 
     def __init__(self, model_name: str = "Qdrant/bm25") -> None:
+        if SparseTextEmbedding is None:
+            raise RuntimeError(
+                "fastembed is required for BM25SparseEmbedder. "
+                "Install full dependencies with `uv sync`."
+            )
         self._model = SparseTextEmbedding(model_name=model_name)
         logger.info("BM25SparseEmbedder loaded", model=model_name)
 
@@ -197,6 +222,11 @@ class BGEReranker:
     """
 
     def __init__(self, model_name: str = "BAAI/bge-reranker-v2-m3") -> None:
+        if torch is None or CrossEncoder is None:
+            raise RuntimeError(
+                "torch and sentence-transformers are required for BGEReranker. "
+                "Install full dependencies with `uv sync`."
+            )
         assert torch.cuda.is_available(), (
             "CUDA is required for BGEReranker but is not available. "
             "Verify RTX 3060 drivers and CUDA 12.4 toolkit installation."
@@ -223,6 +253,8 @@ class BGEReranker:
         return scores.tolist() if hasattr(scores, "tolist") else list(scores)
 
     def get_vram_usage_mb(self) -> float:
+        if torch is None:
+            return 0.0
         return torch.cuda.memory_allocated() / 1024 / 1024
 
 

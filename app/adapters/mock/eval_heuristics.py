@@ -22,7 +22,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI
-from ragas.dataset_schema import SingleTurnSample
 
 from app.cache.semantic_cache import CachedResponse, SingleFlight
 from app.core.config import LogLevel, Settings
@@ -31,6 +30,11 @@ from app.core.router import LLMGenerationResult, RouteDecision, RouteTier, TaskT
 from app.graph.nodes import DocumentGradeOutput, HallucinationGradeOutput
 from app.retrieval.chunker import ChunkMetadata, DocumentChunk
 from app.retrieval.hybrid_store import RetrievedChunk
+
+try:
+    from ragas.dataset_schema import SingleTurnSample
+except ImportError:  # pragma: no cover - optional evaluation dependency
+    SingleTurnSample = Any  # type: ignore[assignment,misc]
 
 if TYPE_CHECKING:
     from evals.dataset_gen import EvalSample

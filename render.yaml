@@ -1,0 +1,26 @@
+# Render Blueprint — One-Click Cloud Portfolio Deployment
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: agentic-rag-eval-engine
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: RUNTIME_MODE
+        value: demo
+      - key: PIPELINE_VERSION
+        value: v3
+      - key: LOG_LEVEL
+        value: INFO
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: QDRANT_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
