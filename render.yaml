@@ -11,7 +11,7 @@ services:
     healthCheckPath: /api/v1/health
     envVars:
       - key: RUNTIME_MODE
-        value: demo
+        value: auto
       - key: PIPELINE_VERSION
         value: v3
       - key: LOG_LEVEL

@@ -42,6 +42,113 @@ _PARAGRAPH_SEP_RE: re.Pattern[str] = re.compile(r"\n{2,}")
 # Sentence boundary: period / ! / ? followed by whitespace.
 _SENTENCE_END_RE: re.Pattern[str] = re.compile(r"(?<=[.!?])\s+")
 
+# Fenced code blocks preserved verbatim during Markdown sanitization.
+_FENCED_CODE_RE: re.Pattern[str] = re.compile(r"```[\s\S]*?```")
+
+# HTML comments and decorative/layout HTML tags stripped before chunking.
+_HTML_COMMENT_RE: re.Pattern[str] = re.compile(r"<!--[\s\S]*?-->")
+_HTML_BREAK_RE: re.Pattern[str] = re.compile(r"<br\s*/?>", re.IGNORECASE)
+_HTML_LAYOUT_TAG_RE: re.Pattern[str] = re.compile(
+    r"</?(?:div|p|span|center|section|header|nav|table|tbody|thead|tr|td|th)\b[^>]*>|<img\b[^>]*>",
+    re.IGNORECASE,
+)
+
+# Shields.io / image badge markdown constructs and link-only navigation lines.
+_LINKED_BADGE_RE: re.Pattern[str] = re.compile(r"\[!\[[^\]]*\]\([^\)]+\)\]\([^\)]+\)")
+_IMAGE_BADGE_RE: re.Pattern[str] = re.compile(
+    r"!\[[^\]]*\]\([^\)]*(?:img\.shields\.io|shields\.io|badge|workflows/[^/]+/badge\.svg)[^\)]*\)",
+    re.IGNORECASE,
+)
+_STANDALONE_IMAGE_RE: re.Pattern[str] = re.compile(r"!\[[^\]]*\]\([^\)]+\)")
+_MARKDOWN_LINK_RE: re.Pattern[str] = re.compile(r"\[([^\]]+)\]\(([^\)]+)\)")
+_MULTI_BLANK_RE: re.Pattern[str] = re.compile(r"\n{3,}")
+_MEANINGFUL_CHAR_RE: re.Pattern[str] = re.compile(r"[A-Za-z0-9\u4e00-\u9fff\uac00-\ud7af]")
+_NAV_LINK_TARGETS: tuple[str, ...] = ("readme.md", "readme.en.md", "readme.ko.md")
+
+
+def _is_navigation_or_badge_line(line: str) -> bool:
+    """Return True when a line is solely Shields.io badges or a language/nav link bar."""
+    stripped = line.strip()
+    if not stripped:
+        return False
+
+    # 1. Pure badge / linked-badge line (e.g. Shields.io / CI badges).
+    without_badges = _LINKED_BADGE_RE.sub("", stripped)
+    without_badges = _IMAGE_BADGE_RE.sub("", without_badges)
+    if without_badges != stripped and not _MEANINGFUL_CHAR_RE.search(without_badges):
+        return True
+
+    # 2. Pure image-only line.
+    without_images = _STANDALONE_IMAGE_RE.sub("", stripped)
+    if without_images != stripped and not _MEANINGFUL_CHAR_RE.search(without_images):
+        return True
+
+    # 3. Language-switcher or pure pipe-separated navigation link bar.
+    links = _MARKDOWN_LINK_RE.findall(stripped)
+    if len(links) >= 2:
+        lowered_targets = " ".join(target.lower() for _, target in links)
+        residual = _MARKDOWN_LINK_RE.sub("", stripped)
+        residual_clean = re.sub(r"[\s|·•/\\,\-\[\]\(\)*_`]+", "", residual)
+        if not residual_clean:
+            return True
+        if any(nav in lowered_targets for nav in _NAV_LINK_TARGETS) and len(residual_clean) <= 4:
+            return True
+
+    return False
+
+
+def sanitize_markdown_text(text: str) -> str:
+    """Strip layout HTML tags, badge lines, and top navigation bars before chunking."""
+    if not text or not text.strip():
+        return ""
+
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+
+    # Temporarily shield fenced code blocks so code examples are never mangled.
+    code_blocks: list[str] = []
+
+    def _stash_code(match: re.Match[str]) -> str:
+        token = f"\x00CODEBLOCK{len(code_blocks)}\x00"
+        code_blocks.append(match.group(0))
+        return token
+
+    working = _FENCED_CODE_RE.sub(_stash_code, normalized)
+    working = _HTML_COMMENT_RE.sub("", working)
+    working = _HTML_BREAK_RE.sub("\n", working)
+    working = _HTML_LAYOUT_TAG_RE.sub("", working)
+
+    cleaned_lines: list[str] = []
+    for line in working.split("\n"):
+        if _is_navigation_or_badge_line(line):
+            continue
+        cleaned_lines.append(line.rstrip())
+
+    working = "\n".join(cleaned_lines)
+    for idx, block in enumerate(code_blocks):
+        working = working.replace(f"\x00CODEBLOCK{idx}\x00", block)
+
+    working = _MULTI_BLANK_RE.sub("\n\n", working)
+    return working.strip()
+
+
+def _is_low_information_segment(segment: str) -> bool:
+    """Return True when a candidate chunk has no substantive prose after stripping syntax."""
+    stripped = segment.strip()
+    if not stripped:
+        return True
+
+    lines = [ln.strip() for ln in stripped.split("\n") if ln.strip()]
+    if lines and all(
+        _is_navigation_or_badge_line(ln) or re.fullmatch(r"[-*_=\s]+", ln) is not None
+        for ln in lines
+    ):
+        return True
+
+    prose = _MARKDOWN_LINK_RE.sub(r"\1", stripped)
+    prose = re.sub(r"[#>*_`~\[\]\(\)|/\\-]+", " ", prose)
+    meaningful = _MEANINGFUL_CHAR_RE.findall(prose)
+    return len(meaningful) < 4
+
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -396,24 +503,28 @@ class DocumentChunker:
             Returns an empty list when *text* is blank.
         """
         resolved_id = doc_id or str(uuid.uuid4())
-        stripped = text.strip()
-        if not stripped:
+        sanitized = sanitize_markdown_text(text)
+        if not sanitized:
             return []
 
         if self.config.mode == ChunkMode.FIXED:
-            return self._chunk_fixed(stripped, source, resolved_id)
-        return self._chunk_semantic(stripped, source, resolved_id)
+            return self._chunk_fixed(sanitized, source, resolved_id)
+        return self._chunk_semantic(sanitized, source, resolved_id)
 
     # ------------------------------------------------------------------
     # Fixed-length mode (v1 baseline)
     # ------------------------------------------------------------------
 
     def _chunk_fixed(self, text: str, source: str, doc_id: str) -> list[DocumentChunk]:
-        raw = _split_fixed(
-            text,
-            chunk_size=self.config.fixed_chunk_size,
-            overlap=self.config.fixed_overlap,
-        )
+        raw = [
+            seg
+            for seg in _split_fixed(
+                text,
+                chunk_size=self.config.fixed_chunk_size,
+                overlap=self.config.fixed_overlap,
+            )
+            if not _is_low_information_segment(seg)
+        ]
         return [
             DocumentChunk.build(
                 text=segment,
@@ -442,7 +553,8 @@ class DocumentChunker:
         for section_path, content in sections:
             sub_chunks = _split_oversized(content, max_chars, self.config.min_chunk_chars)
             for sub in sub_chunks:
-                raw_segments.append((section_path, sub))
+                if not _is_low_information_segment(sub):
+                    raw_segments.append((section_path, sub))
 
         return [
             DocumentChunk.build(
@@ -507,4 +619,5 @@ __all__: Sequence[str] = [
     "DocumentChunker",
     "MarkdownHeaderChunker",
     "make_chunker",
+    "sanitize_markdown_text",
 ]

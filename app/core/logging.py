@@ -70,6 +70,10 @@ class RequestMetrics(BaseModel):
         ge=0,
         description="Number of LangGraph grader/rewriter or fallback retries.",
     )
+    generation_mode: str = Field(
+        default="",
+        description="Generation mode: live_llm | demo_synthesis | fallback.",
+    )
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize metrics to a plain JSON-ready dictionary (Pydantic V2)."""
@@ -79,6 +83,10 @@ class RequestMetrics(BaseModel):
 _REQUEST_METRICS_VAR: ContextVar[RequestMetrics | None] = ContextVar(
     "request_metrics",
     default=None,
+)
+_ACTIVE_PIPELINE_VERSION_VAR: ContextVar[str] = ContextVar(
+    "active_pipeline_version",
+    default="",
 )
 
 # Standard LogRecord attributes excluded when promoting extra record attributes.
@@ -179,12 +187,32 @@ def reset_request_metrics(token: Token[RequestMetrics | None] | None = None) -> 
         _REQUEST_METRICS_VAR.set(None)
 
 
+def get_active_pipeline_version() -> str:
+    """Return the active pipeline version bound to the current async context, if any."""
+    return _ACTIVE_PIPELINE_VERSION_VAR.get()
+
+
+def set_active_pipeline_version(pipeline_version: str) -> Token[str]:
+    """Bind the active pipeline version (v1/v2/v3) into the current async context."""
+    return _ACTIVE_PIPELINE_VERSION_VAR.set(pipeline_version.strip().lower())
+
+
+def reset_active_pipeline_version(token: Token[str] | None = None) -> None:
+    """Reset the active pipeline version context."""
+    if token is not None:
+        _ACTIVE_PIPELINE_VERSION_VAR.reset(token)
+    else:
+        _ACTIVE_PIPELINE_VERSION_VAR.set("")
+
+
 class RequestMetricsContext:
     """Dual sync/async context manager scoping per-request ``RequestMetrics``."""
 
     def __init__(self, **initial_fields: Any) -> None:
+        self._pipeline_version: str | None = initial_fields.pop("pipeline_version", None)
         self._initial_fields = initial_fields
         self._token: Token[RequestMetrics | None] | None = None
+        self._pipeline_token: Token[str] | None = None
         self._metrics: RequestMetrics | None = None
 
     def _enter_scope(self) -> RequestMetrics:
@@ -195,10 +223,17 @@ class RequestMetricsContext:
             fields["vram_allocated_mb"] = sample_cuda_vram_mb()
         metrics = RequestMetrics.model_validate(fields)
         self._token = _REQUEST_METRICS_VAR.set(metrics)
+        if self._pipeline_version:
+            self._pipeline_token = _ACTIVE_PIPELINE_VERSION_VAR.set(
+                str(self._pipeline_version).strip().lower()
+            )
         self._metrics = metrics
         return metrics.model_copy()
 
     def _exit_scope(self) -> None:
+        if self._pipeline_token is not None:
+            _ACTIVE_PIPELINE_VERSION_VAR.reset(self._pipeline_token)
+            self._pipeline_token = None
         if self._token is not None:
             _REQUEST_METRICS_VAR.reset(self._token)
             self._token = None
@@ -461,12 +496,15 @@ __all__: Sequence[str] = [
     "StageLatencyTracker",
     "StructuredJsonFormatter",
     "configure_logging",
+    "get_active_pipeline_version",
     "get_logger",
     "get_request_metrics",
     "log_stage_latency",
     "request_metrics_context",
+    "reset_active_pipeline_version",
     "reset_request_metrics",
     "sample_cuda_vram_mb",
+    "set_active_pipeline_version",
     "set_request_metrics",
     "update_request_metrics",
 ]

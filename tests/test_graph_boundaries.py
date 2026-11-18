@@ -8,7 +8,7 @@ import pytest
 
 from app.cache.semantic_cache import CachedResponse
 from app.core.logging import get_request_metrics, request_metrics_context
-from app.core.router import LLMGenerationResult, RouteDecision, RouteTier
+from app.core.router import LLMGenerationResult, LLMRouterError, RouteDecision, RouteTier
 from app.graph.nodes import FALLBACK_ANSWER, GraphDependencies
 from app.graph.state import make_initial_state
 from app.graph.workflow import (
@@ -356,3 +356,51 @@ def test_compile_workflow_rejects_non_async_sqlite_checkpointer() -> None:
     )
     with pytest.raises(TypeError, match="AsyncSqliteSaver"):
         compile_workflow(deps, checkpointer=SimpleNamespace())  # type: ignore[arg-type]
+
+
+async def test_live_llm_failure_triggers_fallback_without_polluting_cache() -> None:
+    class FailingGenerateRouter(StubRouter):
+        async def ainvoke(
+            self,
+            messages: Any,
+            *,
+            task_type: Any = None,
+            force_tier: Any = None,
+            retry_count: int = 0,
+            temperature: float = 0.0,
+        ) -> LLMGenerationResult:
+            raise LLMRouterError("Simulated cloud API timeout")
+
+    cache = StubSemanticCache()
+    retriever = StubRetriever(
+        [_make_chunk("doc-fallback", "Qdrant stores INT8 quantized vectors for fast search.")]
+    )
+
+    async def relevant_ok(query: str, chunk: RetrievedChunk) -> bool:
+        return True
+
+    async def grounded_ok(answer: str, docs: list[RetrievedChunk]) -> bool:
+        return bool(docs)
+
+    deps = GraphDependencies(
+        retriever=retriever,
+        router=FailingGenerateRouter(),
+        cache=cache,
+        document_grader=relevant_ok,
+        hallucination_checker=grounded_ok,
+    )
+    app = compile_workflow(deps)
+
+    async with request_metrics_context(session_id="sess-llm-fail", pipeline_version="v3"):
+        result = await app.ainvoke(
+            make_initial_state("How does Qdrant store vectors?", session_id="sess-llm-fail")
+        )
+        metrics = get_request_metrics()
+
+    assert result["is_fallback"] is True
+    assert result["fallback_triggered"] is True
+    assert result["generation_mode"] == "fallback"
+    assert "Qdrant" in result["answer"]
+    assert "<div" not in result["answer"]
+    assert cache.set_calls == []
+    assert metrics.generation_mode == "fallback"

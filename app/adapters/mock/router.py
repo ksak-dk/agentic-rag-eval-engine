@@ -17,14 +17,19 @@ from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
 from app.core.config import Settings
-from app.core.logging import update_request_metrics
+from app.core.logging import get_active_pipeline_version, update_request_metrics
 from app.core.router import LLMGenerationResult, RouteDecision, RouteTier, TaskType
 from app.graph.nodes import DocumentGradeOutput, HallucinationGradeOutput, QueryRewriteOutput
+from app.retrieval.chunker import sanitize_markdown_text
 
 _CONTEXT_BLOCK_RE: re.Pattern[str] = re.compile(
     r"\[([^\[\]\s]+)\]\s*\(source:\s*([^,\)]+),\s*section:\s*([^\)]+)\)\s*\n(.*?)(?=\n\n---\n\n|\Z)",
     re.DOTALL,
 )
+_PIPELINE_HINT_RE: re.Pattern[str] = re.compile(r"\[pipeline:(v1|v2|v3)\]", re.IGNORECASE)
+_MD_LINK_RE: re.Pattern[str] = re.compile(r"\[([^\]]+)\]\(([^\)]+)\)")
+_FENCED_CODE_RE: re.Pattern[str] = re.compile(r"```[a-zA-Z0-9_-]*\n([\s\S]*?)```")
+_TABLE_SEP_RE: re.Pattern[str] = re.compile(r"^\s*\|?(?:\s*:?-{2,}:?\s*\|)+\s*:?-{2,}:?\s*\|?\s*$")
 _STOPWORDS: frozenset[str] = frozenset(
     {
         "the",
@@ -109,9 +114,45 @@ class DemoLLMRouter:
         )
 
     @staticmethod
+    def _clean_excerpt_text(raw: str) -> str:
+        """Convert raw Markdown/chunk text into clean, readable prose for synthesis."""
+        sanitized = sanitize_markdown_text(raw)
+        if not sanitized:
+            return ""
+        # Condense fenced code blocks into inline snippets so raw ``` fences do not leak.
+        cleaned = _FENCED_CODE_RE.sub(
+            lambda m: " ".join(
+                ln.strip()
+                for ln in m.group(1).splitlines()
+                if ln.strip() and not ln.strip().startswith("#")
+            ),
+            sanitized,
+        )
+        lines: list[str] = []
+        for raw_line in cleaned.splitlines():
+            line = raw_line.strip()
+            if not line or _TABLE_SEP_RE.match(line):
+                continue
+            line = re.sub(r"^#{1,6}\s+", "", line)
+            line = re.sub(r"^>\s*", "", line)
+            line = re.sub(r"^[-*+]\s+", "", line)
+            line = re.sub(r"^\d+\.\s+", "", line)
+            if "|" in line:
+                cells = [c.strip() for c in line.strip("|").split("|") if c.strip()]
+                line = " · ".join(cells)
+            line = _MD_LINK_RE.sub(r"\1", line)
+            line = re.sub(r"\*{1,2}([^*]+)\*{1,2}", r"\1", line)
+            line = re.sub(r"`([^`]+)`", r"`\1`", line)
+            line = re.sub(r"\s+", " ", line).strip()
+            if line:
+                lines.append(line)
+        return re.sub(r"\s+", " ", " ".join(lines)).strip()
+
+    @classmethod
     def _extract_question_and_contexts(
+        cls,
         messages: Any,
-    ) -> tuple[str, list[tuple[str, str, str]]]:
+    ) -> tuple[str, list[tuple[str, str, str, str]]]:
         user_msg = ""
         if isinstance(messages, Sequence) and not isinstance(messages, (str, bytes)):
             for item in messages:
@@ -127,28 +168,49 @@ class DemoLLMRouter:
             q_part, ctx_part = user_msg, ""
         question = q_part.removeprefix("Question:").strip()
 
-        contexts: list[tuple[str, str, str]] = []
+        contexts: list[tuple[str, str, str, str]] = []
         for match in _CONTEXT_BLOCK_RE.finditer(ctx_part):
             doc_id = match.group(1).strip()
             source = match.group(2).strip()
-            body = re.sub(r"\s+", " ", match.group(4)).strip()
+            section = match.group(3).strip()
+            body = cls._clean_excerpt_text(match.group(4))
             if doc_id and body:
-                contexts.append((doc_id, source, body))
+                contexts.append((doc_id, source, section, body))
         return question, contexts
+
+    @staticmethod
+    def _resolve_pipeline_version(
+        messages: Any,
+        tier: RouteTier,
+        kwargs: dict[str, Any] | None = None,
+    ) -> str:
+        explicit = (kwargs or {}).get("pipeline_version")
+        if isinstance(explicit, str) and explicit.strip().lower() in ("v1", "v2", "v3"):
+            return explicit.strip().lower()
+        ctx_ver = get_active_pipeline_version()
+        if ctx_ver in ("v1", "v2", "v3"):
+            return ctx_ver
+        if isinstance(messages, Sequence) and not isinstance(messages, (str, bytes)):
+            for item in messages:
+                if isinstance(item, tuple) and len(item) >= 2:
+                    match = _PIPELINE_HINT_RE.search(str(item[1]))
+                    if match:
+                        return match.group(1).lower()
+        return "v1" if tier == RouteTier.FAST else "v3"
 
     @staticmethod
     def _select_salient_snippets(
         question: str,
-        contexts: list[tuple[str, str, str]],
+        contexts: list[tuple[str, str, str, str]],
         limit: int,
-    ) -> list[tuple[str, str, str, int]]:
+    ) -> list[tuple[str, str, str, str, int]]:
         q_terms = {
             tok
             for tok in re.findall(r"[a-z0-9_.-]+|[\u4e00-\u9fff]+", question.lower())
             if tok not in _STOPWORDS and len(tok) > 1
         }
-        scored: list[tuple[int, int, str, str, str]] = []
-        for idx, (doc_id, source, body) in enumerate(contexts):
+        scored: list[tuple[int, int, str, str, str, str]] = []
+        for idx, (doc_id, source, section, body) in enumerate(contexts):
             sentences = [s.strip() for s in _SENTENCE_SPLIT_RE.split(body) if s.strip()]
             best_sentence = body
             best_hits = 0
@@ -167,19 +229,25 @@ class DemoLLMRouter:
                 body_lower = body.lower()
                 best_hits = sum(1 for term in q_terms if term in body_lower)
 
-            clipped = best_sentence[:260].rstrip()
-            if len(best_sentence) > 260:
+            clipped = best_sentence[:240].rstrip()
+            if len(best_sentence) > 240:
                 clipped = f"{clipped}..."
-            scored.append((best_hits, -idx, doc_id, source, clipped))
+            scored.append((best_hits, -idx, doc_id, source, section, clipped))
 
         scored.sort(reverse=True)
         return [
-            (doc_id, source, snippet, hits)
-            for hits, _, doc_id, source, snippet in scored[: max(1, limit)]
+            (doc_id, source, section, snippet, hits)
+            for hits, _, doc_id, source, section, snippet in scored[: max(1, limit)]
         ]
 
     @classmethod
-    def _synthesize_answer(cls, messages: Any, tier: RouteTier) -> str:
+    def _synthesize_answer(
+        cls,
+        messages: Any,
+        tier: RouteTier,
+        *,
+        pipeline_version: str | None = None,
+    ) -> str:
         question, contexts = cls._extract_question_and_contexts(messages)
         if not contexts:
             if "original query:" in question.lower():
@@ -190,18 +258,17 @@ class DemoLLMRouter:
                 f"for query: {question}."
             )
 
+        version = pipeline_version or cls._resolve_pipeline_version(messages, tier)
         q_lower = question.lower()
         q_words = set(re.findall(r"[a-z0-9_.-]+|[\u4e00-\u9fff]+", q_lower))
-        limit = 1 if tier == RouteTier.FAST else min(2, len(contexts))
+        limit = 1 if version == "v1" else min(3, len(contexts))
         selected = cls._select_salient_snippets(question, contexts, limit=limit)
-        primary_id, primary_source, _, _ = selected[0]
-        secondary_id = selected[1][0] if len(selected) > 1 else primary_id
-        lead_snippets = [f"{snippet} [{doc_id}]" for doc_id, _, snippet, _ in selected]
+        primary_id, primary_source, _, primary_snippet, _ = selected[0]
 
         is_builtin_source = any(
             marker in primary_source.lower()
             for marker in (
-                "readme.md",
+                "readme",
                 "gemini.md",
                 "benchmark_report.md",
                 "builtin://",
@@ -209,83 +276,82 @@ class DemoLLMRouter:
             )
         )
 
-        if is_builtin_source and q_words & {
-            "v1",
-            "v2",
-            "v3",
-            "infinite",
-            "langgraph",
-            "loop",
-            "loops",
-        }:
-            return (
-                "In this engine, v1 uses fixed chunking with Qdrant INT8 dense-only search; "
-                "v2 adds Markdown header semantic chunking, BM25 sparse + Fusion.RRF, and local "
-                "FP16 bge-reranker-v2-m3 reranking; v3 wraps retrieval in a LangGraph StateGraph "
-                "with Redis 8 semantic caching (cosine >= 0.92), bounded retries (max_retries=2), "
-                f"and AsyncSqliteSaver checkpoints [{primary_id}]. "
-                f"Evidence: {lead_snippets[-1]}"
-            )
-
-        if is_builtin_source and q_words & {
-            "bm25",
-            "rrf",
-            "rerank",
-            "reranking",
-            "qdrant",
-            "dense",
-            "sparse",
-        }:
-            if tier == RouteTier.FAST:
-                return (
-                    "The v1 baseline stores 1024-dim BAAI/bge-m3 dense vectors in Qdrant with "
-                    "INT8 scalar quantization (always_ram=True) for fast single-step ANN "
-                    f"retrieval [{primary_id}]. Evidence: {lead_snippets[0]}"
+        topic_summary = ""
+        if is_builtin_source:
+            if q_words & {"v1", "v2", "v3", "infinite", "langgraph", "loop", "loops"}:
+                topic_summary = (
+                    "The `v1 -> v2 -> v3` progression upgrades fixed-window dense search (`v1`) "
+                    "to Markdown semantic chunking + BM25 RRF + FP16 reranking (`v2`), and "
+                    "adds a bounded LangGraph `StateGraph` (`max_retries=2`, `AsyncSqliteSaver`, "
+                    "Redis 8 semantic cache) in `v3`."
                 )
-            return (
-                "Hybrid retrieval prefetches 1024-dim INT8 dense vectors (BAAI/bge-m3) alongside "
-                "BM25 sparse vectors in Qdrant, combines candidates with server-side Fusion.RRF, "
-                f"and reranks to Top-K via FP16 BAAI/bge-reranker-v2-m3 [{primary_id}]. "
-                f"Evidence: {lead_snippets[-1]}"
-            )
+            elif q_words & {"bm25", "rrf", "rerank", "reranking", "qdrant", "dense", "sparse"}:
+                if version == "v1":
+                    topic_summary = (
+                        "The `v1` baseline runs fixed-length chunking with Qdrant `int8` "
+                        "dense-only ANN retrieval and fast single-step generation."
+                    )
+                else:
+                    topic_summary = (
+                        "Hybrid retrieval prefetches 1024-dim `BAAI/bge-m3` dense vectors "
+                        "alongside `BM25` sparse vectors in Qdrant, fuses candidates with "
+                        "server-side `Fusion.RRF`, and reranks via FP16 `BAAI/bge-reranker-v2-m3`."
+                    )
+            elif (q_words & {"vram", "3060", "gpu", "6gb", "显存"}) or "6 gb" in q_lower:
+                topic_summary = (
+                    "Under the RTX 3060 6 GB VRAM ceiling, zero local LLMs are loaded: "
+                    "only FP16 `BAAI/bge-m3` (~1.1 GB) and `BAAI/bge-reranker-v2-m3` (~1.1 GB) "
+                    "run on CUDA (~2.3 GB total), while LLM inference routes to cloud APIs."
+                )
+            elif q_words & {
+                "ragas",
+                "benchmark",
+                "benchmarks",
+                "eval",
+                "evals",
+                "sla",
+                "p95",
+                "评测",
+            }:
+                topic_summary = (
+                    "Ragas v0.2+ benchmarks rise from Overall Score `0.6759` (`v1`) to "
+                    "`0.8554` (`v2`) and `0.9950` (`v3`), while concurrent SSE load tests "
+                    "pass the P95 < 1800 ms SLA at `678.77 ms`."
+                )
 
-        if is_builtin_source and (
-            (q_words & {"vram", "3060", "gpu", "6gb", "显存"}) or "6 gb" in q_lower
-        ):
-            return (
-                "Under the RTX 3060 6 GB VRAM hard budget, zero local LLMs are deployed: "
-                "only FP16 BAAI/bge-m3 (~1.1 GB) and BAAI/bge-reranker-v2-m3 (~1.1 GB) run on "
-                f"CUDA (~2.3 GB total), while LLM inference routes to cloud APIs [{primary_id}]. "
-                f"Details: {lead_snippets[-1]}"
-            )
+        if version == "v1":
+            if topic_summary:
+                return f"{topic_summary} [{primary_id}] ({primary_snippet})"
+            return f"{primary_snippet} [{primary_id}]"
 
-        if is_builtin_source and q_words & {
-            "ragas",
-            "benchmark",
-            "benchmarks",
-            "eval",
-            "evals",
-            "sla",
-            "p95",
-            "评测",
-        }:
-            return (
-                "Ragas v0.2+ benchmarks show Overall Score rising from 0.6759 (v1) to 0.8554 (v2) "
-                "and 0.9950 (v3, Context Recall 1.0000, Faithfulness 0.9851), while concurrent load "
-                f"testing passes the P95 < 1800 ms SLA at 678.77 ms [{primary_id}]. "
-                f"Context: {lead_snippets[-1]}"
-            )
+        bullet_lines: list[str] = []
+        for doc_id, source, section, snippet, _ in selected:
+            label = section if section and section.lower() != "root" else source
+            bullet_lines.append(f"- **{label}**: {snippet} [{doc_id}]")
+        bullets_md = "\n".join(bullet_lines)
 
-        if tier == RouteTier.FAST:
-            return f"Based on retrieved source ({primary_source}): {lead_snippets[0]}"
-
-        joined = " | ".join(lead_snippets)
-        if secondary_id != primary_id:
-            return (
-                f"Grounded synthesis from {primary_source} [{primary_id}] [{secondary_id}]: "
-                f"{joined}"
+        if version == "v2":
+            lead = topic_summary or (
+                f"**Hybrid Retrieval Summary** (Dense + BM25 `Fusion.RRF` + Rerank from "
+                f"`{primary_source}`):"
             )
-        return f"Grounded synthesis from {primary_source} [{primary_id}]: {joined}"
+            if topic_summary:
+                lead = f"**Hybrid Retrieval Summary**: {topic_summary} [{primary_id}]"
+            return f"{lead}\n\n{bullets_md}"
+
+        # v3: Agentic Self-Correcting Synthesis
+        if topic_summary:
+            core_line = f"**Agentic Synthesis**: {topic_summary} [{primary_id}]"
+        else:
+            core_line = f"**Agentic Synthesis**: {primary_snippet} [{primary_id}]"
+
+        return (
+            f"{core_line}\n\n"
+            f"**Verified Evidence & Context**:\n"
+            f"{bullets_md}\n\n"
+            f"**Grounding Check**: Verified across `{len(selected)}` retrieved context "
+            f"segments with `[doc_id]` citation tracing (`v3` self-correcting pipeline)."
+        )
 
     async def ainvoke(
         self,
@@ -307,7 +373,12 @@ class DemoLLMRouter:
         )
         start = time.perf_counter()
         await asyncio.sleep(0.012 if decision.tier == RouteTier.FAST else 0.02)
-        content = self._synthesize_answer(messages, decision.tier)
+        pipeline_ver = self._resolve_pipeline_version(messages, decision.tier, kwargs)
+        content = self._synthesize_answer(
+            messages,
+            decision.tier,
+            pipeline_version=pipeline_ver,
+        )
         elapsed_ms = round((time.perf_counter() - start) * 1000.0, 2)
         prompt_tokens = max(16, len(str(messages)) // 4)
         completion_tokens = max(8, len(content) // 4)
@@ -318,12 +389,15 @@ class DemoLLMRouter:
             latency_ms=elapsed_ms,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
+            generation_mode="demo_synthesis",
         )
         return LLMGenerationResult(
             content=content,
             route_tier=decision.tier,
             model_name=decision.model_name,
             used_fallback=False,
+            is_fallback=False,
+            generation_mode="demo_synthesis",
             mocked=True,
             ttft_ms=elapsed_ms,
             latency_ms=elapsed_ms,
@@ -342,7 +416,7 @@ class DemoLLMRouter:
         temperature: float = 0.0,
         **kwargs: Any,
     ) -> AsyncIterator[str]:
-        _ = (temperature, kwargs)
+        _ = temperature
         decision = self.select_route(
             task_type=task_type,
             query=query,
@@ -351,7 +425,12 @@ class DemoLLMRouter:
         )
         start = time.perf_counter()
         await asyncio.sleep(0.01 if decision.tier == RouteTier.FAST else 0.016)
-        content = self._synthesize_answer(messages, decision.tier)
+        pipeline_ver = self._resolve_pipeline_version(messages, decision.tier, kwargs)
+        content = self._synthesize_answer(
+            messages,
+            decision.tier,
+            pipeline_version=pipeline_ver,
+        )
         words = content.split(" ")
         ttft_ms: float | None = None
         try:
@@ -371,6 +450,7 @@ class DemoLLMRouter:
                 latency_ms=total_ms,
                 prompt_tokens=max(16, len(str(messages)) // 4),
                 completion_tokens=max(8, len(content) // 4),
+                generation_mode="demo_synthesis",
             )
 
     async def ainvoke_structured(

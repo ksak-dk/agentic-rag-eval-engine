@@ -58,6 +58,8 @@ class RAGGraphState(TypedDict, total=False):
     citations: list[Citation]
     hallucination_passed: bool
     fallback_triggered: bool
+    is_fallback: bool
+    generation_mode: str
     error: str | None
 
 
@@ -86,6 +88,8 @@ def make_initial_state(
         citations=[],
         hallucination_passed=False,
         fallback_triggered=False,
+        is_fallback=False,
+        generation_mode="",
         error=None,
     )
 

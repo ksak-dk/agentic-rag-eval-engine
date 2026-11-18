@@ -198,10 +198,7 @@ class ServiceContainer:
         if not has_valid_cloud_api_keys(self.settings):
             return "demo", "Cloud LLM API keys missing or template placeholders"
 
-        if not await probe_qdrant_ready(self.settings.qdrant_url):
-            return "demo", f"Qdrant unreachable at {self.settings.qdrant_url}"
-
-        return "live", "Cloud API keys and Qdrant service are available"
+        return "live", "Cloud LLM API keys are available"
 
     def _resolve_checkpoint_target(self, mode: ResolvedRuntimeMode) -> str | Path:
         if self._checkpoint_db_override is not None:

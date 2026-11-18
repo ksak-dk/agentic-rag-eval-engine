@@ -8,6 +8,7 @@ from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import ResponseError
 
 from app.cache.semantic_cache import (
+    InMemorySemanticCache,
     SemanticCache,
     VectorIndexAlgorithm,
     cosine_similarity,
@@ -290,3 +291,57 @@ async def test_semantic_cache_handles_blank_query_and_bad_embedder_dim() -> None
         assert await cache.get("valid query") is None
         assert get_request_metrics().cache_hit is False
         assert await cache.set("valid query", "ignored") is None
+
+
+async def test_semantic_cache_blocks_fallback_and_html_polluted_writes() -> None:
+    redis = FakeAsyncRedis()
+    embedder = DeterministicDenseEmbedder(
+        {
+            "fallback query": _unit_vec_with_cosine(1.0),
+            "html query": _unit_vec_with_cosine(1.0),
+            "clean query": _unit_vec_with_cosine(1.0),
+        }
+    )
+    redis_cache = SemanticCache(redis_client=redis, embedder=embedder)
+    mem_cache = InMemorySemanticCache(embedder=embedder)
+
+    for cache in (redis_cache, mem_cache):
+        assert (
+            await cache.set(
+                "fallback query",
+                "Offline fallback answer",
+                namespace="v3",
+                metadata={"is_fallback": True, "generation_mode": "fallback"},
+            )
+            is None
+        )
+        assert (
+            await cache.set(
+                "html query",
+                'Based on README.md: <div align="center"> [**简体中文**](README.md) </div>',
+                namespace="v3",
+                metadata={"generation_mode": "demo_synthesis"},
+            )
+            is None
+        )
+        assert (
+            await cache.set(
+                "fallback query",
+                "I could not find sufficiently relevant and verified context in the knowledge base.",
+                namespace="v3",
+            )
+            is None
+        )
+        assert await cache.get("fallback query", namespace="v3") is None
+        assert await cache.get("html query", namespace="v3") is None
+
+        clean_key = await cache.set(
+            "clean query",
+            "**Agentic Synthesis**: Clean grounded answer [doc-readme-0].",
+            namespace="v3",
+            metadata={"generation_mode": "demo_synthesis", "is_fallback": False},
+        )
+        assert clean_key is not None
+        hit = await cache.get("clean query", namespace="v3")
+        assert hit is not None
+        assert "Clean grounded answer" in hit.response

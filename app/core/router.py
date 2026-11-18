@@ -143,6 +143,14 @@ class LLMGenerationResult(BaseModel):
         default=False,
         description="True when fast primary failed and fallback model answered.",
     )
+    is_fallback: bool = Field(
+        default=False,
+        description="True when the response came from an offline fallback synthesizer after LLM failure.",
+    )
+    generation_mode: str = Field(
+        default="live_llm",
+        description="Generation mode: live_llm | demo_synthesis | fallback.",
+    )
     mocked: bool = Field(
         default=False,
         description="True when produced under MOCK_LLM_STREAM=true.",
@@ -166,6 +174,27 @@ class LLMGenerationResult(BaseModel):
 # ---------------------------------------------------------------------------
 
 MessageInput = str | Sequence[BaseMessage | tuple[str, str] | dict[str, str]]
+
+
+_PLACEHOLDER_KEY_MARKERS: tuple[str, ...] = (
+    "your_",
+    "placeholder",
+    "changeme",
+    "replace_me",
+    "example",
+    "gsk_your_",
+    "aizasy_your_",
+)
+
+
+def _has_valid_api_key(value: str | None) -> bool:
+    if value is None:
+        return False
+    cleaned = value.strip()
+    if len(cleaned) < 8 or cleaned.startswith("<") or cleaned.endswith(">"):
+        return False
+    lowered = cleaned.lower()
+    return not any(marker in lowered for marker in _PLACEHOLDER_KEY_MARKERS)
 
 
 def _coerce_route_tier(tier: RouteTier | str | None) -> RouteTier | None:
@@ -513,12 +542,15 @@ class LLMRouter:
                 latency_ms=elapsed_ms,
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
+                generation_mode="demo_synthesis",
             )
             return LLMGenerationResult(
                 content=content,
                 route_tier=decision.tier,
                 model_name=decision.model_name,
                 used_fallback=False,
+                is_fallback=False,
+                generation_mode="demo_synthesis",
                 mocked=True,
                 ttft_ms=elapsed_ms,
                 latency_ms=elapsed_ms,
@@ -529,50 +561,98 @@ class LLMRouter:
         used_fallback = False
         active_model_name = decision.model_name
         response: Any
+        has_groq = self._fast_override is not None or _has_valid_api_key(
+            self._settings.groq_api_key
+        )
+        has_google = self._strong_override is not None or _has_valid_api_key(
+            self._settings.google_api_key
+        )
 
         if decision.tier == RouteTier.STRONG:
-            strong_model = self._build_strong_model(temperature)
-            try:
-                response = await strong_model.ainvoke(normalized)
-            except Exception as exc:
-                logger.error(
-                    "Strong LLM route failed",
-                    model=active_model_name,
-                    error_type=type(exc).__name__,
-                    error=str(exc),
-                )
-                raise LLMRouterError(
-                    f"Strong LLM route '{active_model_name}' failed: {exc}"
-                ) from exc
-        else:
-            primary_model = self._build_fast_primary(temperature)
-            try:
-                response = await primary_model.ainvoke(normalized)
-            except Exception as primary_exc:
-                fallback_name = self._settings.fast_llm_fallback_model
-                logger.warning(
-                    "Fast primary LLM failed, falling back to Gemini Flash-Lite",
-                    primary_model=active_model_name,
-                    fallback_model=fallback_name,
-                    error_type=type(primary_exc).__name__,
-                    error=str(primary_exc),
-                )
+            if not has_google and has_groq and self._strong_override is None:
                 used_fallback = True
-                active_model_name = fallback_name
-                fallback_model = self._build_fast_fallback(temperature)
+                active_model_name = self._settings.fast_llm_model
+                groq_model = self._build_fast_primary(temperature)
                 try:
-                    response = await fallback_model.ainvoke(normalized)
-                except Exception as fallback_exc:
-                    logger.error(
-                        "Fast fallback LLM failed",
-                        fallback_model=fallback_name,
-                        error_type=type(fallback_exc).__name__,
-                        error=str(fallback_exc),
-                    )
+                    response = await groq_model.ainvoke(normalized)
+                except Exception as exc:
                     raise LLMRouterError(
-                        f"Fast route failed on both '{decision.model_name}' "
-                        f"and fallback '{fallback_name}': {fallback_exc}"
+                        f"Strong fallback route '{active_model_name}' failed: {exc}"
+                    ) from exc
+            else:
+                strong_model = self._build_strong_model(temperature)
+                try:
+                    response = await strong_model.ainvoke(normalized)
+                except Exception as exc:
+                    if self._strong_override is None and _has_valid_api_key(
+                        self._settings.groq_api_key
+                    ):
+                        used_fallback = True
+                        active_model_name = self._settings.fast_llm_model
+                        logger.warning(
+                            "Strong route failed; falling back to Groq fast model",
+                            failed_model=decision.model_name,
+                            fallback_model=active_model_name,
+                            error_type=type(exc).__name__,
+                        )
+                        try:
+                            response = await self._build_fast_primary(temperature).ainvoke(
+                                normalized
+                            )
+                        except Exception as groq_exc:
+                            raise LLMRouterError(
+                                f"Strong route '{decision.model_name}' and Groq fallback failed: "
+                                f"{groq_exc}"
+                            ) from groq_exc
+                    else:
+                        logger.error(
+                            "Strong LLM route failed",
+                            model=active_model_name,
+                            error_type=type(exc).__name__,
+                            error=str(exc),
+                        )
+                        raise LLMRouterError(
+                            f"Strong LLM route '{active_model_name}' failed: {exc}"
+                        ) from exc
+        else:
+            if not has_groq and has_google and self._fast_override is None:
+                used_fallback = True
+                active_model_name = self._settings.fast_llm_fallback_model
+                try:
+                    response = await self._build_fast_fallback(temperature).ainvoke(normalized)
+                except Exception as fallback_exc:
+                    raise LLMRouterError(
+                        f"Fast Gemini route '{active_model_name}' failed: {fallback_exc}"
                     ) from fallback_exc
+            else:
+                primary_model = self._build_fast_primary(temperature)
+                try:
+                    response = await primary_model.ainvoke(normalized)
+                except Exception as primary_exc:
+                    fallback_name = self._settings.fast_llm_fallback_model
+                    logger.warning(
+                        "Fast primary LLM failed, falling back to Gemini Flash-Lite",
+                        primary_model=active_model_name,
+                        fallback_model=fallback_name,
+                        error_type=type(primary_exc).__name__,
+                        error=str(primary_exc),
+                    )
+                    used_fallback = True
+                    active_model_name = fallback_name
+                    fallback_model = self._build_fast_fallback(temperature)
+                    try:
+                        response = await fallback_model.ainvoke(normalized)
+                    except Exception as fallback_exc:
+                        logger.error(
+                            "Fast fallback LLM failed",
+                            fallback_model=fallback_name,
+                            error_type=type(fallback_exc).__name__,
+                            error=str(fallback_exc),
+                        )
+                        raise LLMRouterError(
+                            f"Fast route failed on both '{decision.model_name}' "
+                            f"and fallback '{fallback_name}': {fallback_exc}"
+                        ) from fallback_exc
 
         elapsed_ms = round((time.perf_counter() - start_time) * 1000.0, 2)
         content = _extract_text(response)
@@ -584,12 +664,15 @@ class LLMRouter:
             latency_ms=elapsed_ms,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
+            generation_mode="live_llm",
         )
         return LLMGenerationResult(
             content=content,
             route_tier=decision.tier,
             model_name=active_model_name,
             used_fallback=used_fallback,
+            is_fallback=False,
+            generation_mode="live_llm",
             mocked=False,
             ttft_ms=elapsed_ms,
             latency_ms=elapsed_ms,
@@ -646,6 +729,7 @@ class LLMRouter:
                     latency_ms=total_latency,
                     prompt_tokens=prompt_tokens,
                     completion_tokens=completion_tokens,
+                    generation_mode="demo_synthesis",
                 )
             return
 
@@ -660,66 +744,114 @@ class LLMRouter:
                 total_chars += len(text)
                 yield text
 
+        has_groq = self._fast_override is not None or _has_valid_api_key(
+            self._settings.groq_api_key
+        )
+        has_google = self._strong_override is not None or _has_valid_api_key(
+            self._settings.google_api_key
+        )
+        stream_succeeded = False
+
         try:
             if decision.tier == RouteTier.STRONG:
-                strong_model = self._build_strong_model(temperature)
-                try:
-                    async for text in _iter_model(strong_model):
+                if not has_google and has_groq and self._strong_override is None:
+                    active_model_name = self._settings.fast_llm_model
+                    async for text in _iter_model(self._build_fast_primary(temperature)):
                         yield text
-                except Exception as exc:
-                    logger.error(
-                        "Strong LLM stream failed",
-                        model=active_model_name,
-                        error_type=type(exc).__name__,
-                        error=str(exc),
-                    )
-                    raise LLMRouterError(
-                        f"Strong LLM stream '{active_model_name}' failed: {exc}"
-                    ) from exc
+                    stream_succeeded = True
+                else:
+                    strong_model = self._build_strong_model(temperature)
+                    emitted_any = False
+                    try:
+                        async for text in _iter_model(strong_model):
+                            emitted_any = True
+                            yield text
+                        stream_succeeded = True
+                    except Exception as exc:
+                        if (
+                            not emitted_any
+                            and self._strong_override is None
+                            and _has_valid_api_key(self._settings.groq_api_key)
+                        ):
+                            active_model_name = self._settings.fast_llm_model
+                            try:
+                                async for text in _iter_model(
+                                    self._build_fast_primary(temperature)
+                                ):
+                                    yield text
+                                stream_succeeded = True
+                            except Exception as groq_exc:
+                                raise LLMRouterError(
+                                    f"Strong stream '{decision.model_name}' and Groq fallback "
+                                    f"failed: {groq_exc}"
+                                ) from groq_exc
+                        else:
+                            logger.error(
+                                "Strong LLM stream failed",
+                                model=active_model_name,
+                                error_type=type(exc).__name__,
+                                error=str(exc),
+                            )
+                            raise LLMRouterError(
+                                f"Strong LLM stream '{active_model_name}' failed: {exc}"
+                            ) from exc
             else:
-                primary_model = self._build_fast_primary(temperature)
-                emitted_any = False
-                try:
-                    async for text in _iter_model(primary_model):
-                        emitted_any = True
-                        yield text
-                except Exception as primary_exc:
-                    if emitted_any:
-                        logger.error(
-                            "Fast primary LLM failed mid-stream",
+                if not has_groq and has_google and self._fast_override is None:
+                    active_model_name = self._settings.fast_llm_fallback_model
+                    try:
+                        async for text in _iter_model(self._build_fast_fallback(temperature)):
+                            yield text
+                        stream_succeeded = True
+                    except Exception as fallback_exc:
+                        raise LLMRouterError(
+                            f"Fast Gemini stream '{active_model_name}' failed: {fallback_exc}"
+                        ) from fallback_exc
+                else:
+                    primary_model = self._build_fast_primary(temperature)
+                    emitted_any = False
+                    try:
+                        async for text in _iter_model(primary_model):
+                            emitted_any = True
+                            yield text
+                        stream_succeeded = True
+                    except Exception as primary_exc:
+                        if emitted_any:
+                            logger.error(
+                                "Fast primary LLM failed mid-stream",
+                                primary_model=active_model_name,
+                                error_type=type(primary_exc).__name__,
+                                error=str(primary_exc),
+                            )
+                            raise LLMRouterError(
+                                f"Fast primary stream '{active_model_name}' failed mid-stream: "
+                                f"{primary_exc}"
+                            ) from primary_exc
+
+                        fallback_name = self._settings.fast_llm_fallback_model
+                        logger.warning(
+                            "Fast primary stream failed before first token, falling back",
                             primary_model=active_model_name,
+                            fallback_model=fallback_name,
                             error_type=type(primary_exc).__name__,
                             error=str(primary_exc),
                         )
-                        raise LLMRouterError(
-                            f"Fast primary stream '{active_model_name}' failed mid-stream: "
-                            f"{primary_exc}"
-                        ) from primary_exc
-
-                    fallback_name = self._settings.fast_llm_fallback_model
-                    logger.warning(
-                        "Fast primary stream failed before first token, falling back",
-                        primary_model=active_model_name,
-                        fallback_model=fallback_name,
-                        error_type=type(primary_exc).__name__,
-                        error=str(primary_exc),
-                    )
-                    active_model_name = fallback_name
-                    fallback_model = self._build_fast_fallback(temperature)
-                    try:
-                        async for text in _iter_model(fallback_model):
-                            yield text
-                    except Exception as fallback_exc:
-                        logger.error(
-                            "Fast fallback stream failed",
-                            fallback_model=fallback_name,
-                            error_type=type(fallback_exc).__name__,
-                            error=str(fallback_exc),
-                        )
-                        raise LLMRouterError(
-                            f"Fast stream failed on both '{decision.model_name}' "
-                            f"and fallback '{fallback_name}': {fallback_exc}"
-                        ) from fallback_exc
+                        active_model_name = fallback_name
+                        fallback_model = self._build_fast_fallback(temperature)
+                        try:
+                            async for text in _iter_model(fallback_model):
+                                yield text
+                            stream_succeeded = True
+                        except Exception as fallback_exc:
+                            logger.error(
+                                "Fast fallback stream failed",
+                                fallback_model=fallback_name,
+                                error_type=type(fallback_exc).__name__,
+                                error=str(fallback_exc),
+                            )
+                            raise LLMRouterError(
+                                f"Fast stream failed on both '{decision.model_name}' "
+                                f"and fallback '{fallback_name}': {fallback_exc}"
+                            ) from fallback_exc
         finally:
             total_latency = round((time.perf_counter() - start_time) * 1000.0, 2)
             update_request_metrics(
@@ -727,6 +859,7 @@ class LLMRouter:
                 model_name=active_model_name,
                 ttft_ms=ttft_ms,
                 latency_ms=total_latency,
+                generation_mode="live_llm" if stream_succeeded else "fallback",
             )
 
     async def ainvoke_structured(
@@ -762,55 +895,100 @@ class LLMRouter:
 
         active_model_name = decision.model_name
         result: Any
+        has_groq = self._fast_override is not None or _has_valid_api_key(
+            self._settings.groq_api_key
+        )
+        has_google = self._strong_override is not None or _has_valid_api_key(
+            self._settings.google_api_key
+        )
 
         if decision.tier == RouteTier.STRONG:
-            strong_model = self._build_strong_model(temperature)
-            structured_runnable = strong_model.with_structured_output(schema)  # type: ignore[union-attr]
-            try:
-                result = await structured_runnable.ainvoke(normalized)
-            except Exception as exc:
-                logger.error(
-                    "Strong structured LLM call failed",
-                    model=active_model_name,
-                    schema=schema.__name__,
-                    error_type=type(exc).__name__,
-                    error=str(exc),
-                )
-                raise LLMRouterError(
-                    f"Strong structured route '{active_model_name}' failed: {exc}"
-                ) from exc
+            if not has_google and has_groq and self._strong_override is None:
+                active_model_name = self._settings.fast_llm_model
+                structured_groq = self._build_fast_primary(temperature).with_structured_output(
+                    schema
+                )  # type: ignore[union-attr]
+                try:
+                    result = await structured_groq.ainvoke(normalized)
+                except Exception as exc:
+                    raise LLMRouterError(
+                        f"Strong structured fallback '{active_model_name}' failed: {exc}"
+                    ) from exc
+            else:
+                strong_model = self._build_strong_model(temperature)
+                structured_runnable = strong_model.with_structured_output(schema)  # type: ignore[union-attr]
+                try:
+                    result = await structured_runnable.ainvoke(normalized)
+                except Exception as exc:
+                    if self._strong_override is None and _has_valid_api_key(
+                        self._settings.groq_api_key
+                    ):
+                        active_model_name = self._settings.fast_llm_model
+                        structured_groq = self._build_fast_primary(
+                            temperature
+                        ).with_structured_output(schema)  # type: ignore[union-attr]
+                        try:
+                            result = await structured_groq.ainvoke(normalized)
+                        except Exception as groq_exc:
+                            raise LLMRouterError(
+                                f"Strong structured route '{decision.model_name}' and Groq "
+                                f"fallback failed: {groq_exc}"
+                            ) from groq_exc
+                    else:
+                        logger.error(
+                            "Strong structured LLM call failed",
+                            model=active_model_name,
+                            schema=schema.__name__,
+                            error_type=type(exc).__name__,
+                            error=str(exc),
+                        )
+                        raise LLMRouterError(
+                            f"Strong structured route '{active_model_name}' failed: {exc}"
+                        ) from exc
         else:
-            primary_model = self._build_fast_primary(temperature)
-            structured_primary = primary_model.with_structured_output(schema)  # type: ignore[union-attr]
-            try:
-                result = await structured_primary.ainvoke(normalized)
-            except Exception as primary_exc:
-                fallback_name = self._settings.fast_llm_fallback_model
-                logger.warning(
-                    "Fast primary structured call failed, falling back to Gemini Flash-Lite",
-                    primary_model=active_model_name,
-                    fallback_model=fallback_name,
-                    schema=schema.__name__,
-                    error_type=type(primary_exc).__name__,
-                    error=str(primary_exc),
-                )
-                active_model_name = fallback_name
-                fallback_model = self._build_fast_fallback(temperature)
-                structured_fallback = fallback_model.with_structured_output(schema)  # type: ignore[union-attr]
+            if not has_groq and has_google and self._fast_override is None:
+                active_model_name = self._settings.fast_llm_fallback_model
+                structured_fallback = self._build_fast_fallback(temperature).with_structured_output(
+                    schema
+                )  # type: ignore[union-attr]
                 try:
                     result = await structured_fallback.ainvoke(normalized)
                 except Exception as fallback_exc:
-                    logger.error(
-                        "Fast fallback structured call failed",
+                    raise LLMRouterError(
+                        f"Fast Gemini structured route '{active_model_name}' failed: {fallback_exc}"
+                    ) from fallback_exc
+            else:
+                primary_model = self._build_fast_primary(temperature)
+                structured_primary = primary_model.with_structured_output(schema)  # type: ignore[union-attr]
+                try:
+                    result = await structured_primary.ainvoke(normalized)
+                except Exception as primary_exc:
+                    fallback_name = self._settings.fast_llm_fallback_model
+                    logger.warning(
+                        "Fast primary structured call failed, falling back to Gemini Flash-Lite",
+                        primary_model=active_model_name,
                         fallback_model=fallback_name,
                         schema=schema.__name__,
-                        error_type=type(fallback_exc).__name__,
-                        error=str(fallback_exc),
+                        error_type=type(primary_exc).__name__,
+                        error=str(primary_exc),
                     )
-                    raise LLMRouterError(
-                        f"Fast structured route failed on both '{decision.model_name}' "
-                        f"and fallback '{fallback_name}': {fallback_exc}"
-                    ) from fallback_exc
+                    active_model_name = fallback_name
+                    fallback_model = self._build_fast_fallback(temperature)
+                    structured_fallback = fallback_model.with_structured_output(schema)  # type: ignore[union-attr]
+                    try:
+                        result = await structured_fallback.ainvoke(normalized)
+                    except Exception as fallback_exc:
+                        logger.error(
+                            "Fast fallback structured call failed",
+                            fallback_model=fallback_name,
+                            schema=schema.__name__,
+                            error_type=type(fallback_exc).__name__,
+                            error=str(fallback_exc),
+                        )
+                        raise LLMRouterError(
+                            f"Fast structured route failed on both '{decision.model_name}' "
+                            f"and fallback '{fallback_name}': {fallback_exc}"
+                        ) from fallback_exc
 
         elapsed_ms = round((time.perf_counter() - start_time) * 1000.0, 2)
         update_request_metrics(

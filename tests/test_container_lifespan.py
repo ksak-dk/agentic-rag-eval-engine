@@ -265,3 +265,81 @@ async def test_auto_mode_resolution_fallback_and_custom_injection_preserved(
             )
     assert resp.status_code == 200
     assert resp.json()["answer"] == "Custom router preserved [doc-custom]."
+
+
+async def test_v1_v2_v3_produce_differentiated_clean_outputs_and_auto_live_router(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """v1/v2/v3 emit distinct, HTML-free answers and auto mode activates live router with keys."""
+    _clear_cloud_env(monkeypatch, tmp_path)
+    app = create_app()
+    query = "How does this engine combine hybrid retrieval, reranking, and LangGraph?"
+
+    answers: dict[str, str] = {}
+    async with lifespan(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            for version in ("v1", "v2", "v3"):
+                resp = await client.post(
+                    "/api/v1/chat",
+                    json={
+                        "query": query,
+                        "session_id": f"diff-{version}",
+                        "pipeline_version": version,
+                        "stream": False,
+                    },
+                )
+                assert resp.status_code == 200
+                body = resp.json()
+                answer = body["answer"]
+                answers[version] = answer
+                assert "<div" not in answer
+                assert "img.shields.io" not in answer
+                assert "Based on retrieved source" not in answer
+                assert "Grounded synthesis from" not in answer
+                assert body["metrics"]["generation_mode"] == "demo_synthesis"
+                assert body["metrics"]["ttft_ms"] is not None
+
+            # Second identical v3 request hits cache and still populates ttft_ms
+            cached_resp = await client.post(
+                "/api/v1/chat",
+                json={
+                    "query": query,
+                    "session_id": "diff-v3-cached",
+                    "pipeline_version": "v3",
+                    "stream": False,
+                },
+            )
+            assert cached_resp.status_code == 200
+            assert cached_resp.json()["metrics"]["cache_hit"] is True
+            assert cached_resp.json()["metrics"]["ttft_ms"] is not None
+
+    assert answers["v1"] != answers["v2"]
+    assert answers["v2"] != answers["v3"]
+    assert answers["v1"] != answers["v3"]
+    assert "**Hybrid Retrieval Summary**" in answers["v2"]
+    assert "**Agentic Synthesis**" in answers["v3"]
+    assert "**Verified Evidence & Context**" in answers["v3"]
+
+    # RUNTIME_MODE=auto with valid cloud API key activates live LLMRouter even without Qdrant/Redis
+    auto_live_settings = Settings(
+        runtime_mode="auto",
+        groq_api_key="gsk_valid_cloud_key_123456",
+        google_api_key="",
+        qdrant_url="http://127.0.0.1:19999",
+        redis_url="redis://127.0.0.1:19998",
+        langgraph_checkpoint_db=tmp_path / "auto_live.sqlite3",
+        log_level=LogLevel.WARNING,
+    )
+    auto_live_container = ServiceContainer(auto_live_settings)
+    await auto_live_container.initialize()
+    try:
+        assert auto_live_container.mode == "live"
+        assert auto_live_container.component_status["router"] == "ready (live)"
+        assert auto_live_container.component_status["retriever"] == "ready (demo-fallback)"
+        assert (
+            auto_live_container.component_status["semantic_cache"] == "ready (in-memory-fallback)"
+        )
+    finally:
+        await auto_live_container.shutdown()

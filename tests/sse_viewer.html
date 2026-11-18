@@ -327,7 +327,7 @@
 
     .compare-answer {
       font-size: 0.88rem;
-      white-space: pre-wrap;
+      line-height: 1.55;
       word-break: break-word;
       color: var(--text);
       min-height: 90px;
@@ -347,9 +347,98 @@
       border-radius: 8px;
       padding: 14px;
       min-height: 200px;
-      white-space: pre-wrap;
+      line-height: 1.6;
       word-break: break-word;
       font-size: 0.96rem;
+    }
+
+    .md-render p {
+      margin: 0 0 8px 0;
+    }
+
+    .md-render p:last-child,
+    .md-render ul:last-child,
+    .md-render ol:last-child,
+    .md-render pre:last-child,
+    .md-render blockquote:last-child {
+      margin-bottom: 0;
+    }
+
+    .md-render h3,
+    .md-render h4 {
+      margin: 10px 0 6px 0;
+      color: var(--accent);
+      font-size: 0.96rem;
+    }
+
+    .md-render ul,
+    .md-render ol {
+      margin: 4px 0 8px 0;
+      padding-left: 20px;
+    }
+
+    .md-render li {
+      margin: 3px 0;
+    }
+
+    .md-render strong {
+      color: #f8fafc;
+      font-weight: 600;
+    }
+
+    .md-render code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: rgba(148, 163, 184, 0.14);
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      border-radius: 4px;
+      padding: 1px 5px;
+      color: #bae6fd;
+    }
+
+    .md-render pre {
+      background: #060b14;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      overflow-x: auto;
+      margin: 6px 0 10px 0;
+    }
+
+    .md-render pre code {
+      background: transparent;
+      border: none;
+      padding: 0;
+      font-size: 0.82rem;
+      color: var(--text);
+    }
+
+    .md-render blockquote {
+      margin: 6px 0 8px 0;
+      padding: 4px 10px;
+      border-left: 3px solid var(--accent);
+      color: var(--muted);
+      background: rgba(56, 189, 248, 0.05);
+      border-radius: 0 4px 4px 0;
+    }
+
+    .md-render a {
+      color: var(--accent);
+      text-decoration: underline;
+    }
+
+    .cite-badge {
+      display: inline-block;
+      padding: 0 7px;
+      margin: 0 2px;
+      border-radius: 999px;
+      font-family: var(--mono);
+      font-size: 0.76em;
+      font-weight: 600;
+      background: rgba(56, 189, 248, 0.14);
+      border: 1px solid rgba(56, 189, 248, 0.45);
+      color: var(--accent);
+      vertical-align: baseline;
     }
 
     .error-banner {
@@ -401,7 +490,7 @@
     .timeline-answer {
       font-size: 0.88rem;
       color: var(--text);
-      white-space: pre-wrap;
+      line-height: 1.55;
       word-break: break-word;
     }
 
@@ -561,7 +650,7 @@
     <div class="channels-grid">
       <section class="card">
         <h2>Token Answer Area</h2>
-        <div id="tokenOutput" class="token-output placeholder">Waiting for query...</div>
+        <div id="tokenOutput" class="token-output md-render placeholder">Waiting for query...</div>
       </section>
 
       <section class="card">
@@ -646,6 +735,168 @@
     function setStatus(text, kind = "") {
       statusPill.textContent = text;
       statusPill.className = kind ? `status-pill ${kind}` : "status-pill";
+    }
+
+    function escapeHtml(raw) {
+      return String(raw)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function sanitizeLinkHref(rawUrl) {
+      const decoded = String(rawUrl || "").replace(/&amp;/g, "&").trim();
+      if (
+        decoded.startsWith("https://") ||
+        decoded.startsWith("http://") ||
+        decoded.startsWith("/") ||
+        decoded.startsWith("#") ||
+        /^[a-zA-Z0-9_./-]+\.md(?:#[a-zA-Z0-9_-]+)?$/.test(decoded)
+      ) {
+        return escapeHtml(decoded);
+      }
+      return null;
+    }
+
+    function formatInlineMarkdown(escapedLine, inlineCodes) {
+      let out = escapedLine;
+      out = out.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (full, label, href) => {
+        const safeHref = sanitizeLinkHref(href);
+        if (!safeHref) {
+          return label;
+        }
+        return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+      });
+      out = out.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+      out = out.replace(/(^|[^\*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+      out = out.replace(/\[(doc-[a-zA-Z0-9_.:#-]+|[a-zA-Z0-9_-]+#\d+)\]/g, (_, docId) => {
+        return `<span class="cite-badge" title="Citation: ${docId}">[${docId}]</span>`;
+      });
+      out = out.replace(/\u0000INLINECODE(\d+)\u0000/g, (_, idx) => {
+        return inlineCodes[Number(idx)] || "";
+      });
+      return out;
+    }
+
+    function renderSafeMarkdown(rawText) {
+      const source = String(rawText || "");
+      if (!source.trim()) {
+        return "";
+      }
+
+      const codeBlocks = [];
+      let text = escapeHtml(source).replace(
+        /```([a-zA-Z0-9_-]*)\n?([\s\S]*?)```/g,
+        (_, lang, codeBody) => {
+          const token = `\u0000CODEBLOCK${codeBlocks.length}\u0000`;
+          const langAttr = lang ? ` class="language-${lang}"` : "";
+          codeBlocks.push(`<pre><code${langAttr}>${codeBody.replace(/\n$/, "")}</code></pre>`);
+          return `\n${token}\n`;
+        }
+      );
+
+      const inlineCodes = [];
+      text = text.replace(/`([^`\n]+)`/g, (_, codeBody) => {
+        const token = `\u0000INLINECODE${inlineCodes.length}\u0000`;
+        inlineCodes.push(`<code>${codeBody}</code>`);
+        return token;
+      });
+
+      const lines = text.replace(/\r\n/g, "\n").split("\n");
+      const blocks = [];
+      let listType = null;
+      let listItems = [];
+      let paragraphLines = [];
+
+      function flushParagraph() {
+        if (paragraphLines.length === 0) {
+          return;
+        }
+        const joined = paragraphLines
+          .map((ln) => formatInlineMarkdown(ln, inlineCodes))
+          .join("<br />");
+        blocks.push(`<p>${joined}</p>`);
+        paragraphLines = [];
+      }
+
+      function flushList() {
+        if (!listType || listItems.length === 0) {
+          listType = null;
+          listItems = [];
+          return;
+        }
+        const itemsHtml = listItems
+          .map((item) => `<li>${formatInlineMarkdown(item, inlineCodes)}</li>`)
+          .join("");
+        blocks.push(`<${listType}>${itemsHtml}</${listType}>`);
+        listType = null;
+        listItems = [];
+      }
+
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line) {
+          flushParagraph();
+          flushList();
+          continue;
+        }
+
+        const codeBlockMatch = /^\u0000CODEBLOCK(\d+)\u0000$/.exec(line);
+        if (codeBlockMatch) {
+          flushParagraph();
+          flushList();
+          blocks.push(codeBlocks[Number(codeBlockMatch[1])] || "");
+          continue;
+        }
+
+        const headingMatch = /^(#{1,4})\s+(.+)$/.exec(line);
+        if (headingMatch) {
+          flushParagraph();
+          flushList();
+          const tag = headingMatch[1].length <= 2 ? "h3" : "h4";
+          blocks.push(`<${tag}>${formatInlineMarkdown(headingMatch[2], inlineCodes)}</${tag}>`);
+          continue;
+        }
+
+        const quoteMatch = /^&gt;\s*(.+)$/.exec(line);
+        if (quoteMatch) {
+          flushParagraph();
+          flushList();
+          blocks.push(`<blockquote>${formatInlineMarkdown(quoteMatch[1], inlineCodes)}</blockquote>`);
+          continue;
+        }
+
+        const ulMatch = /^[-*+]\s+(.+)$/.exec(line);
+        if (ulMatch) {
+          flushParagraph();
+          if (listType && listType !== "ul") {
+            flushList();
+          }
+          listType = "ul";
+          listItems.push(ulMatch[1]);
+          continue;
+        }
+
+        const olMatch = /^\d+\.\s+(.+)$/.exec(line);
+        if (olMatch) {
+          flushParagraph();
+          if (listType && listType !== "ol") {
+            flushList();
+          }
+          listType = "ol";
+          listItems.push(olMatch[1]);
+          continue;
+        }
+
+        flushList();
+        paragraphLines.push(line);
+      }
+
+      flushParagraph();
+      flushList();
+      return blocks.join("");
     }
 
     function showError(message) {
@@ -781,8 +1032,8 @@
         qEl.textContent = `Q: ${turn.query}`;
 
         const aEl = document.createElement("div");
-        aEl.className = "timeline-answer";
-        aEl.textContent = `A: ${turn.answer}`;
+        aEl.className = "timeline-answer md-render";
+        aEl.innerHTML = renderSafeMarkdown(turn.answer || "");
 
         card.append(header, qEl, aEl);
         sessionTimeline.appendChild(card);
@@ -807,8 +1058,8 @@
 
       if (eventName === "token") {
         const piece = payload.token ?? "";
-        tokenOutput.textContent += piece;
         capture.answer += piece;
+        tokenOutput.innerHTML = renderSafeMarkdown(capture.answer);
       } else if (eventName === "citations") {
         capture.citations = payload.citations || [];
         renderCitations(capture.citations);
@@ -918,7 +1169,7 @@
           capture.answer = data.answer || "";
           capture.citations = data.citations || [];
           capture.metrics = data.metrics || {};
-          tokenOutput.textContent = capture.answer;
+          tokenOutput.innerHTML = renderSafeMarkdown(capture.answer);
           renderCitations(capture.citations);
           renderMetrics(capture.metrics);
           setStatus(`done (${data.pipeline_version || body.pipeline_version})`, "done");
@@ -1006,13 +1257,18 @@
           } else {
             const m = item.data.metrics || {};
             badge.className = m.cache_hit ? "badge hit" : "badge miss";
-            badge.textContent = m.cache_hit ? "CACHE HIT" : (m.route_tier || "ok");
+            const modeTag = m.generation_mode ? ` · ${m.generation_mode}` : "";
+            badge.textContent = m.cache_hit ? "CACHE HIT" : `${m.route_tier || "ok"}${modeTag}`;
           }
           header.append(title, badge);
 
           const answerEl = document.createElement("div");
-          answerEl.className = "compare-answer";
-          answerEl.textContent = item.error ? item.error : (item.data.answer || "");
+          answerEl.className = "compare-answer md-render";
+          if (item.error) {
+            answerEl.textContent = item.error;
+          } else {
+            answerEl.innerHTML = renderSafeMarkdown(item.data.answer || "");
+          }
 
           const metaEl = document.createElement("div");
           metaEl.className = "compare-meta";

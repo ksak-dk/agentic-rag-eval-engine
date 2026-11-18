@@ -52,7 +52,41 @@ DEFAULT_KEY_PREFIX: str = "rag:cache"
 DEFAULT_NAMESPACE: str = "v3"
 
 _TAG_SPECIAL_RE: re.Pattern[str] = re.compile(r"([,.<>{}\[\]\"':;!@#$%^&*()\-+=~|/\\\s])")
+_RAW_HTML_NOISE_RE: re.Pattern[str] = re.compile(
+    r"</?(?:div|p|span|center|img)\b|img\.shields\.io",
+    re.IGNORECASE,
+)
+_FALLBACK_SIGNATURE_PREFIX: str = (
+    "I could not find sufficiently relevant and verified context in the knowledge base"
+)
 _T = TypeVar("_T")
+
+
+def contains_raw_html_noise(text: str) -> bool:
+    """Return True when text contains unstripped layout HTML or Shields.io badge URLs."""
+    return bool(_RAW_HTML_NOISE_RE.search(text))
+
+
+def is_cacheable_response(
+    response: str,
+    *,
+    metadata: dict[str, Any] | None = None,
+    is_fallback: bool = False,
+) -> bool:
+    """Guard semantic cache against fallback templates, blank replies, or raw HTML noise."""
+    cleaned = response.strip()
+    if not cleaned:
+        return False
+    if is_fallback:
+        return False
+    if cleaned.startswith(_FALLBACK_SIGNATURE_PREFIX):
+        return False
+    if metadata:
+        if bool(metadata.get("is_fallback")) or bool(metadata.get("fallback_triggered")):
+            return False
+        if str(metadata.get("generation_mode", "")).strip().lower() == "fallback":
+            return False
+    return not contains_raw_html_noise(cleaned)
 
 
 class VectorIndexAlgorithm(StrEnum):
@@ -465,6 +499,16 @@ class SemanticCache:
                 )
                 return None
 
+            cached_response_text = top_hit.get("response", "")
+            parsed_meta = _parse_metadata_json(top_hit.get("metadata"))
+            if not is_cacheable_response(cached_response_text, metadata=parsed_meta):
+                update_request_metrics(cache_hit=False)
+                logger.warning(
+                    "Ignored polluted or fallback entry during semantic cache lookup",
+                    namespace=active_ns,
+                )
+                return None
+
             update_request_metrics(cache_hit=True)
             created_at_raw = top_hit.get("created_at", "0.0")
             try:
@@ -474,10 +518,10 @@ class SemanticCache:
 
             return CachedResponse(
                 query=top_hit.get("query", cleaned_query),
-                response=top_hit.get("response", ""),
+                response=cached_response_text,
                 namespace=top_hit.get("namespace", active_ns),
                 similarity=similarity,
-                metadata=_parse_metadata_json(top_hit.get("metadata")),
+                metadata=parsed_meta,
                 created_at=created_at,
             )
         except (RedisError, OSError, TimeoutError, ValueError) as exc:
@@ -518,6 +562,13 @@ class SemanticCache:
             return None
 
         active_ns = namespace or self._default_namespace
+        if not is_cacheable_response(response, metadata=metadata):
+            logger.warning(
+                "Blocked fallback or HTML-polluted response from semantic cache write",
+                namespace=active_ns,
+            )
+            return None
+
         active_ttl = self._ttl_seconds if ttl_seconds is None else int(ttl_seconds)
 
         try:
@@ -774,7 +825,7 @@ class InMemorySemanticCache:
 
         flight_key = f"get:{active_ns}:{cleaned_query.lower()}"
         hit = await self.singleflight.do(flight_key, _lookup)
-        if hit is None:
+        if hit is None or not is_cacheable_response(hit.response, metadata=hit.metadata):
             update_request_metrics(cache_hit=False)
             return None
 
@@ -796,6 +847,13 @@ class InMemorySemanticCache:
             return None
 
         active_ns = namespace or self._default_namespace
+        if not is_cacheable_response(response, metadata=metadata):
+            logger.warning(
+                "Blocked fallback or HTML-polluted response from semantic cache write",
+                namespace=active_ns,
+            )
+            return None
+
         active_ttl = self._ttl_seconds if ttl_seconds is None else int(ttl_seconds)
         query_vec = self._embedder.embed([cleaned_query])[0]
         digest = hashlib.sha256(cleaned_query.encode("utf-8")).hexdigest()[:24]
@@ -854,7 +912,9 @@ __all__: Sequence[str] = [
     "SemanticCache",
     "SingleFlight",
     "VectorIndexAlgorithm",
+    "contains_raw_html_noise",
     "cosine_similarity",
+    "is_cacheable_response",
     "pack_float32_vector",
     "unpack_float32_vector",
 ]

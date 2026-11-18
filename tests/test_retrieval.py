@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock
 
 from qdrant_client.models import Fusion, FusionQuery, Prefetch, SparseVector
 
-from app.retrieval.chunker import ChunkMode, DocumentChunker, make_chunker
+from app.retrieval.chunker import ChunkMode, DocumentChunker, make_chunker, sanitize_markdown_text
 from app.retrieval.hybrid_store import (
     DENSE_VECTOR_NAME,
     SPARSE_VECTOR_NAME,
@@ -135,3 +135,31 @@ async def test_hybrid_search_returns_reranker_order_with_zero_based_ranks() -> N
         ("candidate-c", 0.5, 1),
         ("candidate-a", 0.2, 2),
     ]
+
+
+def test_markdown_sanitizer_strips_html_badges_and_nav_links() -> None:
+    noisy_doc = (
+        "# agentic-rag-eval-engine\n\n"
+        '<div align="center">\n\n'
+        "[**简体中文**](README.md) | [English](README.en.md) | [한국어](README.ko.md)\n\n"
+        "</div>\n\n"
+        "[![CI](https://github.com/org/repo/actions/workflows/ci.yml/badge.svg)](https://github.com/org/repo)\n"
+        "![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB)\n\n"
+        "## Overview\n\n"
+        "Production-grade Agentic RAG engine for 6 GB VRAM edge GPUs.\n\n"
+        "```bash\nuv run pytest -v\n```\n"
+    )
+
+    sanitized = sanitize_markdown_text(noisy_doc)
+    assert "<div" not in sanitized
+    assert "img.shields.io" not in sanitized
+    assert "README.en.md" not in sanitized
+    assert "uv run pytest -v" in sanitized
+
+    for version in ("v1", "v3"):
+        chunks = make_chunker(version).chunk(noisy_doc, source="README.md", doc_id="doc-readme")
+        assert len(chunks) >= 1
+        assert "<div" not in chunks[0].text
+        assert "img.shields.io" not in chunks[0].text
+        assert "Production-grade Agentic RAG engine" in chunks[0].text
+        assert [c.metadata.chunk_index for c in chunks] == list(range(len(chunks)))

@@ -28,6 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from sse_starlette.sse import EventSourceResponse
 
+from app.adapters.mock.router import DemoLLMRouter
 from app.core.config import Settings, get_settings
 from app.core.logging import (
     get_request_metrics,
@@ -36,7 +37,7 @@ from app.core.logging import (
     sample_cuda_vram_mb,
     update_request_metrics,
 )
-from app.core.router import RouteTier, TaskType
+from app.core.router import LLMRouterError, RouteTier, TaskType
 from app.graph.nodes import (
     FALLBACK_ANSWER,
     GraphDependencies,
@@ -328,10 +329,18 @@ def _build_rag_messages(query: str, docs: list[RetrievedChunk]) -> list[tuple[st
 def _sync_metrics_from_generation(gen_result: Any) -> None:
     raw_tier = getattr(gen_result, "route_tier", RouteTier.FAST)
     tier_val = raw_tier.value if hasattr(raw_tier, "value") else str(raw_tier)
+    is_fallback = bool(getattr(gen_result, "is_fallback", False))
+    gen_mode = str(getattr(gen_result, "generation_mode", "") or "")
+    if is_fallback:
+        gen_mode = "fallback"
+    elif not gen_mode:
+        gen_mode = "demo_synthesis" if getattr(gen_result, "mocked", False) else "live_llm"
+
     updates: dict[str, Any] = {
         "route_tier": tier_val,
         "model_name": str(getattr(gen_result, "model_name", "")),
         "cache_hit": False,
+        "generation_mode": gen_mode,
     }
     ttft_ms = getattr(gen_result, "ttft_ms", None)
     if ttft_ms is not None:
@@ -353,6 +362,14 @@ def _sync_metrics_from_v3_state(
     route_tier = str(state.get("route_tier") or RouteTier.FAST.value)
     cache_hit = bool(state.get("cache_hit", False))
     retry_count = int(state.get("retry_count", 0))
+    is_fallback = bool(state.get("is_fallback")) or bool(state.get("fallback_triggered"))
+    current_metrics = get_request_metrics()
+    gen_mode = str(state.get("generation_mode") or current_metrics.generation_mode or "")
+    if is_fallback:
+        gen_mode = "fallback"
+    elif not gen_mode:
+        gen_mode = "demo_synthesis" if isinstance(deps.router, DemoLLMRouter) else "live_llm"
+
     explicit_model = state.get("model_name")
     if isinstance(explicit_model, str) and explicit_model:
         model_name = explicit_model
@@ -367,6 +384,7 @@ def _sync_metrics_from_v3_state(
         model_name=model_name,
         cache_hit=cache_hit,
         retry_count=retry_count,
+        generation_mode=gen_mode,
     )
 
 
@@ -416,14 +434,33 @@ async def _run_v1_or_v2_sync(
     force_tier = RouteTier.FAST if version == "v1" else RouteTier.STRONG
 
     async with log_stage_latency("generate", pipeline_version=version, context_chunks=len(docs)):
-        gen_result = await deps.router.ainvoke(
-            messages,
-            task_type=TaskType.GENERATION,
-            force_tier=force_tier,
-        )
-        _sync_metrics_from_generation(gen_result)
+        try:
+            gen_result = await deps.router.ainvoke(
+                messages,
+                task_type=TaskType.GENERATION,
+                force_tier=force_tier,
+            )
+            _sync_metrics_from_generation(gen_result)
+            raw_content = str(gen_result.content)
+        except LLMRouterError as exc:
+            logger.warning(
+                "Live LLM invocation failed; falling back to offline synthesis",
+                pipeline_version=version,
+                error=str(exc),
+            )
+            raw_content = DemoLLMRouter._synthesize_answer(
+                messages,
+                force_tier,
+                pipeline_version=version,
+            )
+            update_request_metrics(
+                route_tier=force_tier.value,
+                model_name=_resolve_model_name_for_tier(force_tier.value, deps),
+                cache_hit=False,
+                generation_mode="fallback",
+            )
 
-    annotated_answer, citations = _extract_citations(str(gen_result.content), docs)
+    annotated_answer, citations = _extract_citations(raw_content, docs)
     return annotated_answer, citations
 
 
@@ -510,18 +547,39 @@ async def _stream_v1_or_v2_live(
     first_token_ms: float | None = None
 
     async with log_stage_latency("generate", pipeline_version=version, context_chunks=len(docs)):
-        async for chunk in deps.router.astream(
-            messages,
-            task_type=TaskType.GENERATION,
-            force_tier=force_tier,
-        ):
-            piece = str(chunk)
-            if not piece:
-                continue
-            if first_token_ms is None:
-                first_token_ms = round((time.perf_counter() - request_start) * 1000.0, 2)
-            raw_parts.append(piece)
-            yield ("token", piece)
+        used_fallback = False
+        try:
+            async for chunk in deps.router.astream(
+                messages,
+                task_type=TaskType.GENERATION,
+                force_tier=force_tier,
+            ):
+                piece = str(chunk)
+                if not piece:
+                    continue
+                if first_token_ms is None:
+                    first_token_ms = round((time.perf_counter() - request_start) * 1000.0, 2)
+                raw_parts.append(piece)
+                yield ("token", piece)
+        except LLMRouterError as exc:
+            if raw_parts:
+                raise
+            used_fallback = True
+            logger.warning(
+                "Live LLM stream failed before first token; falling back to offline synthesis",
+                pipeline_version=version,
+                error=str(exc),
+            )
+            fallback_text = DemoLLMRouter._synthesize_answer(
+                messages,
+                force_tier,
+                pipeline_version=version,
+            )
+            for piece in _tokenize_for_stream(fallback_text):
+                if first_token_ms is None:
+                    first_token_ms = round((time.perf_counter() - request_start) * 1000.0, 2)
+                raw_parts.append(piece)
+                yield ("token", piece)
 
         raw_answer = "".join(raw_parts)
         annotated_answer, citations = _extract_citations(raw_answer, docs)
@@ -540,6 +598,12 @@ async def _stream_v1_or_v2_live(
             metric_updates["model_name"] = _resolve_model_name_for_tier(force_tier.value, deps)
         if current.ttft_ms is None and first_token_ms is not None:
             metric_updates["ttft_ms"] = first_token_ms
+        if used_fallback:
+            metric_updates["generation_mode"] = "fallback"
+        elif not current.generation_mode:
+            metric_updates["generation_mode"] = (
+                "demo_synthesis" if isinstance(deps.router, DemoLLMRouter) else "live_llm"
+            )
         update_request_metrics(**metric_updates)
 
     yield ("citations", citations)
@@ -636,7 +700,11 @@ async def chat_endpoint(
                 detail=str(exc),
             ) from exc
 
-        async with request_metrics_context(request_id=request_id, session_id=session_id):
+        async with request_metrics_context(
+            request_id=request_id,
+            session_id=session_id,
+            pipeline_version=version,
+        ):
             try:
                 async with log_stage_latency(
                     "chat_request",
@@ -667,7 +735,10 @@ async def chat_endpoint(
                     detail=f"Chat execution failed: {exc}",
                 ) from exc
 
-            metrics_dict = get_request_metrics().to_dict()
+            current_metrics = get_request_metrics()
+            if current_metrics.ttft_ms is None and current_metrics.latency_ms is not None:
+                current_metrics = update_request_metrics(ttft_ms=current_metrics.latency_ms)
+            metrics_dict = current_metrics.to_dict()
             return ChatResponse(
                 answer=answer,
                 citations=citations,
@@ -680,7 +751,11 @@ async def chat_endpoint(
         request_start = time.perf_counter()
         citations: list[Citation] = []
 
-        async with request_metrics_context(request_id=request_id, session_id=session_id):
+        async with request_metrics_context(
+            request_id=request_id,
+            session_id=session_id,
+            pipeline_version=version,
+        ):
             try:
                 async with log_stage_latency(
                     "chat_request",

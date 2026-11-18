@@ -27,6 +27,7 @@ from typing import Any
 import structlog
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.cache.semantic_cache import is_cacheable_response
 from app.core.logging import log_stage_latency, update_request_metrics
 from app.core.router import RouteTier, TaskType
 from app.graph.state import (
@@ -208,16 +209,33 @@ async def cache_lookup_node(state: RAGGraphState, deps: GraphDependencies) -> di
         return {"cache_hit": False}
 
     meta = getattr(hit, "metadata", {}) or {}
+    cached_text = str(getattr(hit, "response", "") or "")
+    if not is_cacheable_response(cached_text, metadata=meta):
+        update_request_metrics(cache_hit=False, session_id=session_id)
+        logger.warning(
+            "Skipped polluted or fallback semantic cache entry",
+            session_id=session_id,
+        )
+        return {"cache_hit": False}
+
     route_tier = str(meta.get("route_tier", "fast"))
+    cached_gen_mode = str(meta.get("generation_mode") or "live_llm")
     citations = _parse_cached_citations(meta.get("citations"))
-    update_request_metrics(cache_hit=True, session_id=session_id, route_tier=route_tier)
+    update_request_metrics(
+        cache_hit=True,
+        session_id=session_id,
+        route_tier=route_tier,
+        generation_mode=cached_gen_mode,
+    )
     return {
         "cache_hit": True,
-        "answer": str(hit.response),
+        "answer": cached_text,
         "route_tier": route_tier,
         "citations": citations,
         "hallucination_passed": True,
         "fallback_triggered": False,
+        "is_fallback": False,
+        "generation_mode": cached_gen_mode,
         "error": None,
     }
 
@@ -384,23 +402,48 @@ async def generate_node(state: RAGGraphState, deps: GraphDependencies) -> dict[s
                 retry_count=retry_count,
             )
             annotated_answer, citations = _extract_citations(gen_result.content, docs)
+            gen_mode = str(
+                getattr(gen_result, "generation_mode", "")
+                or ("demo_synthesis" if getattr(gen_result, "mocked", False) else "live_llm")
+            )
+            is_fb = bool(getattr(gen_result, "is_fallback", False))
+            if is_fb:
+                gen_mode = "fallback"
+            update_request_metrics(generation_mode=gen_mode)
             return {
                 "answer": annotated_answer,
                 "citations": citations,
                 "route_tier": RouteTier.STRONG.value,
-                "fallback_triggered": False,
+                "fallback_triggered": is_fb,
+                "is_fallback": is_fb,
+                "generation_mode": gen_mode,
                 "error": None,
             }
         except Exception as exc:
             logger.error(
-                "Generation node failed",
+                "Generation node failed; synthesizing degraded fallback answer",
                 error_type=type(exc).__name__,
                 error=str(exc),
             )
+            from app.adapters.mock.router import DemoLLMRouter
+
+            fallback_text = DemoLLMRouter._synthesize_answer(
+                messages,
+                RouteTier.STRONG,
+                pipeline_version=state.get("pipeline_version", "v3"),
+            )
+            annotated_answer, citations = _extract_citations(fallback_text, docs)
+            update_request_metrics(
+                route_tier=RouteTier.STRONG.value,
+                generation_mode="fallback",
+            )
             return {
-                "answer": "",
-                "citations": [],
+                "answer": annotated_answer,
+                "citations": citations,
                 "route_tier": RouteTier.STRONG.value,
+                "fallback_triggered": True,
+                "is_fallback": True,
+                "generation_mode": "fallback",
                 "error": str(exc),
             }
 
@@ -460,6 +503,8 @@ async def cache_write_node(state: RAGGraphState, deps: GraphDependencies) -> dic
     query = (state.get("query") or "").strip()
     answer = (state.get("answer") or "").strip()
     pipeline_version = state.get("pipeline_version", "v3")
+    is_fallback = bool(state.get("is_fallback")) or bool(state.get("fallback_triggered"))
+    gen_mode = str(state.get("generation_mode") or "")
 
     should_write = (
         deps.cache is not None
@@ -467,13 +512,21 @@ async def cache_write_node(state: RAGGraphState, deps: GraphDependencies) -> dic
         and bool(answer)
         and bool(state.get("hallucination_passed"))
         and not bool(state.get("cache_hit"))
-        and not bool(state.get("fallback_triggered"))
+        and not is_fallback
+        and gen_mode.lower() != "fallback"
+        and is_cacheable_response(
+            answer,
+            metadata={"is_fallback": is_fallback, "generation_mode": gen_mode},
+            is_fallback=is_fallback,
+        )
     )
 
     if should_write:
         citations = [coerce_citation(c).model_dump() for c in (state.get("citations") or [])]
         metadata = {
             "route_tier": state.get("route_tier", RouteTier.STRONG.value),
+            "generation_mode": gen_mode or "live_llm",
+            "is_fallback": False,
             "citations": citations,
         }
         async with log_stage_latency("cache_write"):
@@ -503,11 +556,14 @@ async def fallback_node(state: RAGGraphState, deps: GraphDependencies) -> dict[s
         max_retries=deps.max_retries,
         error=state.get("error"),
     )
+    update_request_metrics(generation_mode="fallback")
     return {
         "answer": FALLBACK_ANSWER,
         "citations": [],
         "hallucination_passed": False,
         "fallback_triggered": True,
+        "is_fallback": True,
+        "generation_mode": "fallback",
     }
 
 
