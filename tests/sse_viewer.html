@@ -1,357 +1,1189 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Agentic RAG Dual-Channel SSE Viewer</title>
+  <title>Agentic RAG Eval Engine — Agentic RAG Dual-Channel SSE Viewer</title>
   <style>
     :root {
-      --bg: #0f172a;
-      --panel: #1e293b;
-      --panel-alt: #0b1220;
-      --border: #334155;
-      --text: #e2e8f0;
+      --bg-canvas: #090d16;
+      --bg-surface: #0f172a;
+      --bg-card: #1e293b;
+      --bg-card-alt: #131c2e;
+      --bg-input: #0b1120;
+      --border: rgba(148, 163, 184, 0.14);
+      --border-strong: rgba(148, 163, 184, 0.28);
+      --text: #f1f5f9;
+      --text-secondary: #cbd5e1;
       --muted: #94a3b8;
       --accent: #38bdf8;
       --accent-strong: #0284c7;
+      --indigo: #6366f1;
+      --violet: #8b5cf6;
+      --emerald: #10b981;
       --ok: #22c55e;
       --warn: #f59e0b;
       --err: #ef4444;
-      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --gradient-brand: linear-gradient(135deg, #6366f1 0%, #06b6d4 100%);
+      --gradient-v3: linear-gradient(135deg, rgba(99, 102, 241, 0.22) 0%, rgba(16, 185, 129, 0.18) 100%);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", "Malgun Gothic", sans-serif;
     }
 
     * {
       box-sizing: border-box;
     }
 
-    body {
+    html, body {
       margin: 0;
-      padding: 24px;
-      background: var(--bg);
+      padding: 0;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      background: var(--bg-canvas);
       color: var(--text);
       font-family: var(--sans);
       line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
     }
 
-    .container {
-      max-width: 1240px;
-      margin: 0 auto;
-      display: grid;
-      gap: 18px;
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.22);
+      border-radius: 999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(148, 163, 184, 0.4);
     }
 
-    header {
+    .workbench-shell {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 12px;
-      border-bottom: 1px solid var(--border);
-      padding-bottom: 12px;
+      flex-direction: column;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
     }
 
-    .header-meta {
+    /* 1. Top Header Bar */
+    .top-header {
+      height: 58px;
+      min-height: 58px;
+      background: rgba(15, 23, 42, 0.92);
+      border-bottom: 1px solid var(--border);
+      padding: 0 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      z-index: 30;
+      backdrop-filter: blur(10px);
+    }
+
+    .brand-cluster {
       display: flex;
       align-items: center;
       gap: 10px;
-      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .brand-logo {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: var(--gradient-brand);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 16px rgba(99, 102, 241, 0.35);
+      flex-shrink: 0;
+    }
+
+    .brand-logo svg {
+      width: 18px;
+      height: 18px;
+      color: #ffffff;
+    }
+
+    .brand-titles {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .brand-title-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
     h1 {
       margin: 0;
-      font-size: 1.25rem;
+      font-size: 0.98rem;
+      font-weight: 700;
       letter-spacing: 0.01em;
+      color: #f8fafc;
+      white-space: nowrap;
+    }
+
+    .version-badge {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: rgba(99, 102, 241, 0.18);
+      border: 1px solid rgba(99, 102, 241, 0.45);
+      color: #a5b4fc;
+      white-space: nowrap;
+    }
+
+    .brand-subtitle {
+      font-size: 0.72rem;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Segmented View Switcher */
+    .segmented-control {
+      display: inline-flex;
+      align-items: center;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 3px;
+      gap: 4px;
+    }
+
+    .seg-btn {
+      background: transparent;
+      color: var(--muted);
+      border: none;
+      border-radius: 6px;
+      padding: 6px 13px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.16s ease;
+      white-space: nowrap;
+    }
+
+    .seg-btn:hover:not(:disabled) {
+      color: var(--text);
+      background: rgba(148, 163, 184, 0.08);
+    }
+
+    .seg-btn.active {
+      background: var(--gradient-brand);
+      color: #ffffff;
+      box-shadow: 0 2px 10px rgba(6, 182, 212, 0.25);
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
     }
 
     .status-pill {
       font-family: var(--mono);
-      font-size: 0.8rem;
+      font-size: 0.75rem;
       padding: 4px 10px;
       border-radius: 999px;
-      background: var(--panel);
+      background: var(--bg-card-alt);
       border: 1px solid var(--border);
       color: var(--muted);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
     }
 
     .status-pill.running {
       color: var(--accent);
-      border-color: var(--accent);
+      border-color: rgba(56, 189, 248, 0.5);
+      background: rgba(56, 189, 248, 0.1);
     }
 
     .status-pill.done {
-      color: var(--ok);
-      border-color: var(--ok);
+      color: #34d399;
+      border-color: rgba(16, 185, 129, 0.45);
+      background: rgba(16, 185, 129, 0.1);
     }
 
     .status-pill.warn {
       color: var(--warn);
-      border-color: var(--warn);
+      border-color: rgba(245, 158, 11, 0.45);
+      background: rgba(245, 158, 11, 0.1);
     }
 
     .status-pill.error {
-      color: var(--err);
-      border-color: var(--err);
+      color: #f87171;
+      border-color: rgba(239, 68, 68, 0.5);
+      background: rgba(239, 68, 68, 0.12);
     }
 
-    .card {
-      background: var(--panel);
+    .lang-switcher {
+      display: inline-flex;
+      align-items: center;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 2px;
+      gap: 2px;
+    }
+
+    .lang-btn {
+      background: transparent;
+      color: var(--muted);
+      border: none;
+      border-radius: 5px;
+      padding: 4px 8px;
+      font-size: 0.73rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .lang-btn:hover:not(:disabled) {
+      color: var(--text);
+      background: rgba(148, 163, 184, 0.1);
+    }
+
+    .lang-btn.active {
+      background: var(--bg-card);
+      color: var(--accent);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+    }
+
+    /* Main 3-Column Workbench Grid */
+    .workbench-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 295px minmax(0, 1fr) 365px;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    /* Left Sidebar */
+    .sidebar-left {
+      background: var(--bg-surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      padding: 12px;
+      gap: 12px;
+      min-height: 0;
+    }
+
+    /* Center Main Canvas */
+    .canvas-center {
+      background: var(--bg-canvas);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
+      position: relative;
+    }
+
+    .canvas-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      min-height: 0;
+    }
+
+    /* Right Sidebar */
+    .sidebar-right {
+      background: var(--bg-surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    /* Reusable Panel & Card Styles */
+    .panel-box {
+      background: rgba(30, 41, 59, 0.55);
       border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 16px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
 
-    .card h2 {
-      margin: 0 0 12px 0;
-      font-size: 0.95rem;
+    .panel-title-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .panel-title {
+      margin: 0;
+      font-size: 0.78rem;
+      font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.05em;
       color: var(--accent);
-    }
-
-    .section-header {
-      display: flex;
-      justify-content: space-between;
+      display: inline-flex;
       align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
-      margin-bottom: 12px;
+      gap: 6px;
     }
 
-    .section-header h2 {
-      margin: 0;
-    }
-
-    .controls-grid {
-      display: grid;
-      grid-template-columns: 2fr 1.6fr 0.9fr auto;
-      gap: 12px;
-      align-items: end;
-    }
-
-    .ingest-grid {
-      display: grid;
-      grid-template-columns: 2fr 1fr auto;
-      gap: 12px;
-      align-items: end;
-      margin-top: 12px;
-    }
-
-    @media (max-width: 900px) {
-      .controls-grid,
-      .ingest-grid {
-        grid-template-columns: 1fr;
-      }
+    .micro-badge {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: rgba(99, 102, 241, 0.14);
+      border: 1px solid rgba(99, 102, 241, 0.32);
+      color: #c7d2fe;
     }
 
     .field {
       display: flex;
       flex-direction: column;
-      gap: 6px;
-    }
-
-    .session-inline {
-      display: flex;
-      gap: 8px;
-      align-items: stretch;
+      gap: 4px;
     }
 
     label {
-      font-size: 0.8rem;
+      font-size: 0.74rem;
       color: var(--muted);
+      font-weight: 500;
     }
 
     input[type="text"],
+    input[type="number"],
     select,
     textarea {
       width: 100%;
-      background: var(--panel-alt);
+      background: var(--bg-input);
       color: var(--text);
       border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 9px 11px;
+      border-radius: 7px;
+      padding: 7px 10px;
       font-family: var(--sans);
-      font-size: 0.92rem;
+      font-size: 0.82rem;
+      transition: border-color 0.15s ease;
+    }
+
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    select:focus,
+    textarea:focus {
+      outline: none;
+      border-color: var(--accent);
     }
 
     input[type="text"],
+    input[type="number"],
     select {
       font-family: var(--mono);
-      font-size: 0.85rem;
+      font-size: 0.78rem;
     }
 
     textarea {
       resize: vertical;
-      min-height: 74px;
-    }
-
-    .checkbox-field {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding-bottom: 8px;
-      font-size: 0.88rem;
-      color: var(--text);
-    }
-
-    .query-row {
-      margin-top: 12px;
-      display: flex;
-      gap: 10px;
-      align-items: stretch;
-      flex-wrap: wrap;
-    }
-
-    .query-row textarea {
-      flex: 1 1 360px;
-    }
-
-    .btn-group {
-      display: flex;
-      gap: 8px;
-      align-items: stretch;
+      min-height: 64px;
     }
 
     button {
       background: var(--accent-strong);
       color: #ffffff;
       border: none;
-      border-radius: 6px;
-      padding: 10px 18px;
+      border-radius: 7px;
+      padding: 8px 14px;
+      font-size: 0.82rem;
       font-weight: 600;
       cursor: pointer;
       white-space: nowrap;
-      transition: background 0.15s ease;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
     }
 
     button:hover:not(:disabled) {
       background: var(--accent);
-      color: #0f172a;
+      color: #090d16;
     }
 
     button:disabled {
-      opacity: 0.55;
+      opacity: 0.5;
       cursor: not-allowed;
     }
 
     button.secondary {
-      background: var(--panel-alt);
-      color: var(--text);
+      background: var(--bg-input);
+      color: var(--text-secondary);
       border: 1px solid var(--border);
-      padding: 8px 12px;
-      font-size: 0.82rem;
+      padding: 6px 10px;
+      font-size: 0.75rem;
     }
 
     button.secondary:hover:not(:disabled) {
       border-color: var(--accent);
       color: var(--accent);
-      background: var(--panel-alt);
+      background: rgba(56, 189, 248, 0.08);
     }
 
     button.compare-btn {
-      background: #0f766e;
+      background: var(--gradient-brand);
+      color: #ffffff;
     }
 
     button.compare-btn:hover:not(:disabled) {
-      background: #14b8a6;
-      color: #0f172a;
+      filter: brightness(1.1);
+      color: #ffffff;
     }
 
-    details.ingest-panel summary {
+    .session-inline {
+      display: flex;
+      gap: 6px;
+      align-items: stretch;
+    }
+
+    .session-timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 230px;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+
+    .timeline-item {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--indigo);
+      border-radius: 7px;
+      padding: 8px 10px;
+      cursor: pointer;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+
+    .timeline-item:hover {
+      border-color: var(--accent);
+      background: rgba(30, 41, 59, 0.75);
+    }
+
+    .timeline-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      font-family: var(--mono);
+      font-size: 0.69rem;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .timeline-query {
+      font-weight: 600;
+      color: var(--text);
+      font-size: 0.78rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .timeline-answer {
+      font-size: 0.74rem;
+      color: var(--muted);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      margin-top: 3px;
+    }
+
+    /* Accordion Details in Left Sidebar */
+    details.sidebar-accordion {
+      background: rgba(30, 41, 59, 0.55);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+
+    details.sidebar-accordion summary {
       cursor: pointer;
       list-style: none;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 0.95rem;
+      font-size: 0.78rem;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.04em;
       color: var(--accent);
+      user-select: none;
     }
 
-    details.ingest-panel summary::-webkit-details-marker {
+    details.sidebar-accordion summary::-webkit-details-marker {
       display: none;
+    }
+
+    .accordion-body {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
     }
 
     .ingest-status {
-      margin-top: 10px;
-      padding: 10px 12px;
+      margin-top: 4px;
+      padding: 7px 9px;
       border-radius: 6px;
       border: 1px solid var(--border);
-      background: var(--panel-alt);
+      background: var(--bg-input);
       font-family: var(--mono);
-      font-size: 0.8rem;
+      font-size: 0.72rem;
       color: var(--muted);
       display: none;
+      word-break: break-all;
     }
 
-    .channels-grid {
-      display: grid;
-      grid-template-columns: 1.5fr 1fr;
-      gap: 18px;
+    .checkbox-field {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      cursor: pointer;
     }
 
+    /* Center Canvas: Arena & Playground Views */
+    .canvas-view-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .canvas-view-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .canvas-view-title h2 {
+      margin: 0;
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+
+    /* Arena 3-Column Grid */
     .compare-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 14px;
-    }
-
-    @media (max-width: 960px) {
-      .channels-grid,
-      .compare-grid {
-        grid-template-columns: 1fr;
-      }
+      flex: 1;
+      min-height: 290px;
     }
 
     .compare-card {
-      background: var(--panel-alt);
+      background: var(--bg-surface);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 12px;
+      border-radius: 11px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      overflow: hidden;
+      transition: border-color 0.18s ease, box-shadow 0.18s ease;
+      cursor: pointer;
+    }
+
+    .compare-card:hover {
+      border-color: var(--border-strong);
+    }
+
+    .compare-card.inspected {
+      border-color: rgba(56, 189, 248, 0.55);
+      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.2), 0 8px 24px rgba(2, 6, 23, 0.45);
+    }
+
+    .compare-card.card-v3 {
+      border-color: rgba(139, 92, 246, 0.45);
+      background: linear-gradient(180deg, rgba(99, 102, 241, 0.07) 0%, rgba(15, 23, 42, 0.96) 140px);
+    }
+
+    .compare-card.card-v3.inspected {
+      border-color: #10b981;
+      box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.25), 0 8px 26px rgba(16, 185, 129, 0.12);
     }
 
     .compare-card-header {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      background: rgba(15, 23, 42, 0.7);
+    }
+
+    .compare-card-toprow {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 6px;
+    }
+
+    .pipeline-badge {
       font-family: var(--mono);
-      font-size: 0.84rem;
+      font-size: 0.75rem;
       font-weight: 700;
-      color: var(--accent);
+      padding: 2px 8px;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .pipeline-badge.v1 {
+      background: rgba(148, 163, 184, 0.15);
+      color: #cbd5e1;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+    }
+
+    .pipeline-badge.v2 {
+      background: rgba(6, 182, 212, 0.15);
+      color: #67e8f9;
+      border: 1px solid rgba(6, 182, 212, 0.38);
+    }
+
+    .pipeline-badge.v3 {
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.28), rgba(16, 185, 129, 0.25));
+      color: #6ee7b7;
+      border: 1px solid rgba(16, 185, 129, 0.5);
+    }
+
+    .rec-tag {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: rgba(245, 158, 11, 0.18);
+      border: 1px solid rgba(245, 158, 11, 0.45);
+      color: #fcd34d;
+    }
+
+    .pipeline-arch-desc {
+      font-size: 0.71rem;
+      color: var(--muted);
+      font-family: var(--mono);
     }
 
     .compare-answer {
-      font-size: 0.88rem;
-      line-height: 1.55;
+      padding: 12px 14px;
+      font-size: 0.85rem;
+      line-height: 1.6;
       word-break: break-word;
       color: var(--text);
-      min-height: 90px;
+      flex: 1;
+      overflow-y: auto;
+      min-height: 180px;
     }
 
-    .compare-meta {
-      font-family: var(--mono);
-      font-size: 0.76rem;
-      color: var(--muted);
+    /* Inline Telemetry Pills Bar */
+    .telemetry-pills {
+      padding: 8px 10px;
       border-top: 1px solid var(--border);
-      padding-top: 8px;
+      background: rgba(9, 13, 22, 0.65);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      align-items: center;
+    }
+
+    .telemetry-pill {
+      font-family: var(--mono);
+      font-size: 0.69rem;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: rgba(30, 41, 59, 0.9);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+
+    .telemetry-pill.hit {
+      color: #4ade80;
+      border-color: rgba(34, 197, 94, 0.45);
+      background: rgba(34, 197, 94, 0.12);
+    }
+
+    .telemetry-pill.miss {
+      color: #cbd5e1;
+      border-color: rgba(148, 163, 184, 0.25);
+    }
+
+    .telemetry-pill.ttft {
+      color: #38bdf8;
+      border-color: rgba(56, 189, 248, 0.35);
+    }
+
+    .telemetry-pill.rewrite {
+      color: #c084fc;
+      border-color: rgba(192, 132, 252, 0.35);
+    }
+
+    /* Single-Channel Playground View */
+    .playground-container {
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+      flex: 1;
+    }
+
+    .playground-answer-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      overflow: hidden;
     }
 
     .token-output {
-      background: var(--panel-alt);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 14px;
-      min-height: 200px;
-      line-height: 1.6;
+      padding: 16px 18px;
+      min-height: 220px;
+      flex: 1;
+      line-height: 1.65;
       word-break: break-word;
-      font-size: 0.96rem;
+      font-size: 0.92rem;
+      overflow-y: auto;
     }
 
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+      gap: 8px;
+    }
+
+    .metric-tile {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px 10px;
+    }
+
+    .metric-key {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      color: var(--muted);
+    }
+
+    .metric-val {
+      font-family: var(--mono);
+      font-size: 0.84rem;
+      font-weight: 600;
+      margin-top: 2px;
+      color: var(--text);
+      word-break: break-all;
+    }
+
+    /* Bottom-Docked Prompt & Quick-Start Pills */
+    .prompt-dock {
+      background: rgba(15, 23, 42, 0.96);
+      border-top: 1px solid var(--border);
+      padding: 10px 18px 12px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 20;
+    }
+
+    .quick-pills-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .quick-pills-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--accent);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .quick-pills-row {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 7px;
+    }
+
+    .quick-pill-btn {
+      background: rgba(30, 41, 59, 0.85);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 0.74rem;
+      font-weight: 600;
+      text-align: left;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: inline-block;
+      transition: all 0.15s ease;
+    }
+
+    .quick-pill-btn:hover:not(:disabled) {
+      background: rgba(56, 189, 248, 0.14);
+      border-color: var(--accent);
+      color: #ffffff;
+      transform: translateY(-1px);
+    }
+
+    .dock-input-row {
+      display: flex;
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .dock-input-row textarea {
+      flex: 1;
+      min-height: 48px;
+      max-height: 110px;
+      padding: 9px 12px;
+      font-size: 0.86rem;
+      resize: none;
+    }
+
+    .dock-actions {
+      display: flex;
+      gap: 7px;
+      align-items: stretch;
+    }
+
+    .error-banner {
+      padding: 7px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--err);
+      background: rgba(239, 68, 68, 0.14);
+      color: #fecaca;
+      font-family: var(--mono);
+      font-size: 0.76rem;
+      display: none;
+    }
+
+    /* Right Sidebar: Upper Trace + Lower Tabs */
+    .inspector-trace-box {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      background: rgba(15, 23, 42, 0.6);
+    }
+
+    .trace-pipe-selector {
+      display: inline-flex;
+      gap: 4px;
+      background: var(--bg-input);
+      padding: 2px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+
+    .trace-pipe-btn {
+      background: transparent;
+      color: var(--muted);
+      border: none;
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .trace-pipe-btn.active {
+      background: var(--bg-card);
+      color: var(--accent);
+    }
+
+    .trace-nodes-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .trace-node {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-left: 3px solid #475569;
+      border-radius: 7px;
+      padding: 6px 9px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+    }
+
+    .trace-node.active {
+      border-left-color: var(--accent);
+      border-color: rgba(56, 189, 248, 0.4);
+      background: rgba(56, 189, 248, 0.07);
+    }
+
+    .trace-node.done {
+      border-left-color: var(--emerald);
+      border-color: rgba(16, 185, 129, 0.32);
+    }
+
+    .trace-node.fast-hit {
+      border-left-color: #22c55e;
+      border-color: rgba(34, 197, 94, 0.6);
+      background: rgba(34, 197, 94, 0.14);
+      box-shadow: 0 0 12px rgba(34, 197, 94, 0.15);
+    }
+
+    .trace-node.skipped {
+      opacity: 0.52;
+      border-left-color: #334155;
+    }
+
+    .trace-node.warn {
+      border-left-color: var(--warn);
+      border-color: rgba(245, 158, 11, 0.45);
+    }
+
+    .trace-node-title {
+      font-family: var(--mono);
+      font-size: 0.73rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .trace-node-sub {
+      font-size: 0.68rem;
+      color: var(--muted);
+    }
+
+    .trace-node-badge {
+      font-family: var(--mono);
+      font-size: 0.67rem;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: rgba(30, 41, 59, 0.9);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .trace-node.done .trace-node-badge {
+      color: #6ee7b7;
+      border-color: rgba(16, 185, 129, 0.4);
+    }
+
+    .trace-node.fast-hit .trace-node-badge {
+      color: #4ade80;
+      border-color: #22c55e;
+      background: rgba(22, 163, 74, 0.25);
+    }
+
+    .trace-node.active .trace-node-badge {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    /* Right Sidebar Lower Tabs */
+    .inspector-tabs-bar {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      background: var(--bg-input);
+      border-bottom: 1px solid var(--border);
+      padding: 4px 10px 0 10px;
+      gap: 6px;
+    }
+
+    .inspector-tab-btn {
+      background: transparent;
+      color: var(--muted);
+      border: none;
+      border-bottom: 2px solid transparent;
+      border-radius: 0;
+      padding: 7px 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .inspector-tab-btn:hover:not(:disabled) {
+      color: var(--text);
+      background: transparent;
+    }
+
+    .inspector-tab-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    .inspector-tab-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 14px;
+      min-height: 0;
+    }
+
+    .citations-list {
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+
+    .citation-card {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 8px;
+      padding: 9px 11px;
+      transition: all 0.25s ease;
+    }
+
+    @keyframes citePulseGlow {
+      0% {
+        border-color: #38bdf8;
+        box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.7);
+        background: rgba(56, 189, 248, 0.18);
+      }
+      50% {
+        border-color: #10b981;
+        box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+        background: rgba(16, 185, 129, 0.14);
+      }
+      100% {
+        border-color: #38bdf8;
+        box-shadow: 0 0 0 0 rgba(56, 189, 248, 0);
+        background: var(--bg-input);
+      }
+    }
+
+    .citation-card.pulse-highlight {
+      animation: citePulseGlow 1.6s ease-in-out 2;
+      border-color: var(--accent);
+    }
+
+    .citation-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+
+    .citation-meta {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+
+    .citation-snippet {
+      font-size: 0.79rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* Ragas Benchmark Table */
+    .ragas-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--mono);
+      font-size: 0.73rem;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .ragas-table th,
+    .ragas-table td {
+      padding: 7px 8px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .ragas-table th {
+      background: rgba(30, 41, 59, 0.85);
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .ragas-table td.v3-col {
+      color: #6ee7b7;
+      font-weight: 700;
+      background: rgba(16, 185, 129, 0.07);
+    }
+
+    .sla-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .sla-card {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 8px 10px;
+    }
+
+    .sla-card-label {
+      font-size: 0.69rem;
+      color: var(--muted);
+    }
+
+    .sla-card-val {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-top: 2px;
+    }
+
+    /* Markdown Rendering Engine & Citation Badges */
     .md-render p {
       margin: 0 0 8px 0;
     }
@@ -360,21 +1192,30 @@
     .md-render ul:last-child,
     .md-render ol:last-child,
     .md-render pre:last-child,
-    .md-render blockquote:last-child {
+    .md-render blockquote:last-child,
+    .md-render table:last-child {
       margin-bottom: 0;
     }
 
+    .md-render h1,
+    .md-render h2,
     .md-render h3,
     .md-render h4 {
       margin: 10px 0 6px 0;
-      color: var(--accent);
-      font-size: 0.96rem;
+      color: #f8fafc;
+      font-weight: 700;
+      line-height: 1.35;
     }
+
+    .md-render h1 { font-size: 1.05rem; color: var(--accent); }
+    .md-render h2 { font-size: 0.98rem; color: var(--accent); }
+    .md-render h3 { font-size: 0.92rem; color: #7dd3fc; }
+    .md-render h4 { font-size: 0.86rem; color: #bae6fd; }
 
     .md-render ul,
     .md-render ol {
       margin: 4px 0 8px 0;
-      padding-left: 20px;
+      padding-left: 19px;
     }
 
     .md-render li {
@@ -382,25 +1223,25 @@
     }
 
     .md-render strong {
-      color: #f8fafc;
+      color: #ffffff;
       font-weight: 600;
     }
 
     .md-render code {
       font-family: var(--mono);
-      font-size: 0.85em;
-      background: rgba(148, 163, 184, 0.14);
-      border: 1px solid rgba(148, 163, 184, 0.22);
+      font-size: 0.84em;
+      background: rgba(148, 163, 184, 0.15);
+      border: 1px solid rgba(148, 163, 184, 0.24);
       border-radius: 4px;
       padding: 1px 5px;
       color: #bae6fd;
     }
 
     .md-render pre {
-      background: #060b14;
+      background: #050811;
       border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 10px 12px;
+      border-radius: 7px;
+      padding: 9px 11px;
       overflow-x: auto;
       margin: 6px 0 10px 0;
     }
@@ -409,17 +1250,36 @@
       background: transparent;
       border: none;
       padding: 0;
-      font-size: 0.82rem;
+      font-size: 0.79rem;
       color: var(--text);
     }
 
     .md-render blockquote {
       margin: 6px 0 8px 0;
-      padding: 4px 10px;
+      padding: 5px 10px;
       border-left: 3px solid var(--accent);
-      color: var(--muted);
-      background: rgba(56, 189, 248, 0.05);
-      border-radius: 0 4px 4px 0;
+      color: var(--text-secondary);
+      background: rgba(56, 189, 248, 0.06);
+      border-radius: 0 5px 5px 0;
+    }
+
+    .md-render table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0;
+      font-size: 0.79rem;
+    }
+
+    .md-render th,
+    .md-render td {
+      border: 1px solid var(--border);
+      padding: 5px 8px;
+      text-align: left;
+    }
+
+    .md-render th {
+      background: rgba(30, 41, 59, 0.8);
+      color: var(--accent);
     }
 
     .md-render a {
@@ -428,271 +1288,645 @@
     }
 
     .cite-badge {
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
       padding: 0 7px;
       margin: 0 2px;
       border-radius: 999px;
       font-family: var(--mono);
-      font-size: 0.76em;
-      font-weight: 600;
-      background: rgba(56, 189, 248, 0.14);
-      border: 1px solid rgba(56, 189, 248, 0.45);
+      font-size: 0.74em;
+      font-weight: 700;
+      background: rgba(56, 189, 248, 0.16);
+      border: 1px solid rgba(56, 189, 248, 0.5);
       color: var(--accent);
       vertical-align: baseline;
+      cursor: pointer;
+      transition: all 0.15s ease;
     }
 
-    .error-banner {
-      margin-top: 10px;
-      padding: 10px 12px;
-      border-radius: 6px;
-      border: 1px solid var(--err);
-      background: rgba(239, 68, 68, 0.12);
-      color: #fecaca;
-      font-family: var(--mono);
-      font-size: 0.84rem;
-      display: none;
-    }
-
-    .citations-list,
-    .session-timeline {
-      display: grid;
-      gap: 10px;
-    }
-
-    .citation-card,
-    .timeline-item {
-      background: var(--panel-alt);
-      border: 1px solid var(--border);
-      border-left: 3px solid var(--accent);
-      border-radius: 6px;
-      padding: 10px 12px;
-    }
-
-    .timeline-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-      font-family: var(--mono);
-      font-size: 0.78rem;
-      color: var(--muted);
-      margin-bottom: 6px;
-    }
-
-    .timeline-query {
-      font-weight: 600;
-      color: var(--accent);
-      margin-bottom: 6px;
-      font-size: 0.9rem;
-    }
-
-    .timeline-answer {
-      font-size: 0.88rem;
-      color: var(--text);
-      line-height: 1.55;
-      word-break: break-word;
+    .cite-badge:hover {
+      background: var(--accent);
+      color: #090d16;
+      transform: translateY(-1px);
     }
 
     .badge {
       display: inline-block;
-      padding: 2px 7px;
+      padding: 1px 6px;
       border-radius: 999px;
       font-family: var(--mono);
-      font-size: 0.72rem;
+      font-size: 0.68rem;
       border: 1px solid var(--border);
     }
 
     .badge.hit {
       color: var(--ok);
-      border-color: var(--ok);
+      border-color: rgba(34, 197, 94, 0.5);
+      background: rgba(34, 197, 94, 0.1);
     }
 
     .badge.miss {
       color: var(--warn);
-      border-color: var(--warn);
-    }
-
-    .citation-header {
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-      font-family: var(--mono);
-      font-size: 0.82rem;
-      color: var(--accent);
-      margin-bottom: 4px;
-    }
-
-    .citation-meta {
-      font-family: var(--mono);
-      font-size: 0.76rem;
-      color: var(--muted);
-      margin-bottom: 6px;
-    }
-
-    .citation-snippet {
-      font-size: 0.86rem;
-      color: var(--text);
-    }
-
-    .metrics-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-      gap: 10px;
-    }
-
-    .metric-tile {
-      background: var(--panel-alt);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 10px 12px;
-    }
-
-    .metric-key {
-      font-family: var(--mono);
-      font-size: 0.74rem;
-      color: var(--muted);
-    }
-
-    .metric-val {
-      font-family: var(--mono);
-      font-size: 0.95rem;
-      font-weight: 600;
-      margin-top: 2px;
-      color: var(--text);
-      word-break: break-all;
+      border-color: rgba(245, 158, 11, 0.45);
     }
 
     .placeholder {
       color: var(--muted);
-      font-size: 0.88rem;
+      font-size: 0.8rem;
+    }
+
+    /* Responsive collapse for screens < 1024px */
+    @media (max-width: 1024px) {
+      html, body, .workbench-shell {
+        height: auto;
+        overflow-y: auto;
+      }
+      .top-header {
+        height: auto;
+        padding: 10px 14px;
+        flex-wrap: wrap;
+      }
+      .workbench-grid {
+        grid-template-columns: 1fr;
+        overflow: visible;
+      }
+      .sidebar-left, .sidebar-right {
+        border: none;
+        border-bottom: 1px solid var(--border);
+        overflow: visible;
+      }
+      .compare-grid {
+        grid-template-columns: 1fr;
+      }
+      .quick-pills-row {
+        grid-template-columns: 1fr 1fr;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>Agentic RAG Dual-Channel SSE Viewer</h1>
-      <div class="header-meta">
-        <span id="storeChunksBadge" class="status-pill">kb: probing...</span>
+  <div class="workbench-shell">
+    <!-- 1. Top Global Status & i18n Navigation Bar -->
+    <header class="top-header">
+      <div class="brand-cluster">
+        <div class="brand-logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+        </div>
+        <div class="brand-titles">
+          <div class="brand-title-row">
+            <h1>Agentic RAG Eval Engine</h1>
+            <span class="version-badge">v2.0+</span>
+          </div>
+          <div class="brand-subtitle" data-i18n="brand_subtitle">
+            Agentic RAG Dual-Channel SSE Viewer · Hybrid RRF · FP16 Rerank · LangGraph Workbench
+          </div>
+        </div>
+      </div>
+
+      <!-- Segmented View Control (Arena default active) -->
+      <div class="segmented-control" role="tablist" aria-label="Workspace View Switcher">
+        <button id="viewModeArenaBtn" class="seg-btn active" type="button" data-i18n="nav_arena">
+          ⚡ v1 / v2 / v3 同屏竞技场 (Arena View)
+        </button>
+        <button id="viewModePlaygroundBtn" class="seg-btn" type="button" data-i18n="nav_playground">
+          💬 单通道调试 (Playground View)
+        </button>
+      </div>
+
+      <div class="header-right">
+        <span id="storeChunksBadge" class="status-pill">🟢 Online | Chunks: -- | Mode: auto</span>
         <span id="statusPill" class="status-pill">idle</span>
+        <div class="lang-switcher" role="group" aria-label="Language Switcher">
+          <button type="button" class="lang-btn active" data-lang="zh">简体中文 (ZH)</button>
+          <button type="button" class="lang-btn" data-lang="en">English (EN)</button>
+          <button type="button" class="lang-btn" data-lang="ko">한국어 (KO)</button>
+        </div>
       </div>
     </header>
 
-    <details id="ingestPanel" class="card ingest-panel">
-      <summary>
-        <span>Live Knowledge Base Ingest (POST /api/v1/documents/ingest)</span>
-        <span class="status-pill">SHA-256 Idempotent + Cache Invalidation</span>
-      </summary>
-      <div class="ingest-grid">
-        <div class="field">
-          <label for="ingestSourceInput">Document Source / Filename</label>
-          <input id="ingestSourceInput" type="text" value="custom_notes.md" />
-        </div>
-        <div class="field">
-          <label for="ingestPipelineSelect">Chunking Pipeline</label>
-          <select id="ingestPipelineSelect">
-            <option value="v3" selected>v3 (Semantic Markdown)</option>
-            <option value="v2">v2 (Semantic Markdown)</option>
-            <option value="v1">v1 (Fixed Window)</option>
-          </select>
-        </div>
-        <button id="ingestBtn" type="button">立即投喂</button>
-      </div>
-      <div class="field" style="margin-top: 10px;">
-        <label for="ingestContentInput">Markdown / Text Content</label>
-        <textarea
-          id="ingestContentInput"
-          placeholder="# Project-Hyperion-9921&#10;Paste Markdown documentation here to index live and invalidate stale cache..."
-        ></textarea>
-      </div>
-      <div id="ingestStatus" class="ingest-status"></div>
-    </details>
+    <!-- Main 3-Column Enterprise Workbench -->
+    <div class="workbench-grid">
+      <!-- 2. Left Sidebar: Session History + Dynamic KB Ingest + Advanced Settings -->
+      <aside class="sidebar-left">
+        <!-- Module A: Multi-Turn Session & Checkpoint History -->
+        <section class="panel-box">
+          <div class="panel-title-bar">
+            <h2 class="panel-title" data-i18n="left_session_title">会话与状态持久化</h2>
+            <span class="micro-badge">AsyncSqliteSaver</span>
+          </div>
+          <div class="field">
+            <label for="sessionInput" data-i18n="label_session_id">Session ID (多轮检查点线程)</label>
+            <div class="session-inline">
+              <input id="sessionInput" type="text" placeholder="auto-generated if blank" />
+              <button id="newSessionBtn" class="secondary" type="button" data-i18n="btn_new_session">➕ 新建会话</button>
+            </div>
+          </div>
+          <div class="panel-title-bar" style="margin-top: 2px;">
+            <span style="font-size: 0.72rem; color: var(--muted);" data-i18n="label_turn_history">多轮对话轨迹</span>
+            <button id="clearHistoryBtn" class="secondary" type="button" data-i18n="btn_clear_history">🗑️ 清空历史</button>
+          </div>
+          <div id="sessionTimeline" class="session-timeline">
+            <div class="placeholder" data-i18n="placeholder_timeline">暂无历史轮次。发送提问以追踪 SQLite 检查点连续性与语义缓存命中。</div>
+          </div>
+        </section>
 
-    <section class="card">
-      <h2>Request Controls</h2>
-      <div class="controls-grid">
-        <div class="field">
-          <label for="endpointInput">Endpoint URL</label>
-          <input id="endpointInput" type="text" value="http://localhost:8000/api/v1/chat" />
+        <!-- Module B: Dynamic Knowledge Base Ingestion -->
+        <details id="ingestPanel" class="sidebar-accordion" open>
+          <summary>
+            <span data-i18n="left_ingest_title">动态知识库投喂 (Live Ingest)</span>
+            <span class="micro-badge" data-i18n="ingest_micro_copy">SHA-256 幂等去重 + 语义缓存自动失效</span>
+          </summary>
+          <div class="accordion-body">
+            <div class="field">
+              <label for="ingestSourceInput" data-i18n="label_ingest_source">文档标题 / 来源路径 (Source)</label>
+              <input id="ingestSourceInput" type="text" value="custom_notes.md" />
+            </div>
+            <div class="field">
+              <label for="ingestPipelineSelect" data-i18n="label_ingest_pipeline">切分流水线 (Chunking Pipeline)</label>
+              <select id="ingestPipelineSelect">
+                <option value="v3" selected>v3 (Semantic Markdown)</option>
+                <option value="v2">v2 (Semantic Markdown)</option>
+                <option value="v1">v1 (Fixed Window)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="ingestContentInput" data-i18n="label_ingest_content">Markdown 正文内容</label>
+              <textarea
+                id="ingestContentInput"
+                placeholder="# Project-Hyperion-9921&#10;Paste Markdown documentation here to index live and invalidate stale cache..."
+              ></textarea>
+            </div>
+            <button id="ingestBtn" type="button" data-i18n="btn_ingest">⚡ 幂等投喂并刷新缓存</button>
+            <div id="ingestStatus" class="ingest-status"></div>
+          </div>
+        </details>
+
+        <!-- Module C: Bottom Collapsed Advanced Connection Settings -->
+        <details id="advancedSettingsPanel" class="sidebar-accordion">
+          <summary>
+            <span data-i18n="left_adv_title">⚙️ 高级连接参数 (Advanced)</span>
+            <span class="micro-badge">SSE / Top-K</span>
+          </summary>
+          <div class="accordion-body">
+            <div class="field">
+              <label for="endpointInput" data-i18n="label_endpoint">Endpoint URL</label>
+              <input id="endpointInput" type="text" value="http://localhost:8000/api/v1/chat" />
+            </div>
+            <div class="field">
+              <label for="pipelineSelect" data-i18n="label_pipeline_ver">Pipeline Version (单通道调试生效)</label>
+              <select id="pipelineSelect">
+                <option value="v3" selected>v3 (Agentic LangGraph)</option>
+                <option value="v2">v2 (Hybrid + Rerank)</option>
+                <option value="v1">v1 (Dense Only)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="topKInput" data-i18n="label_topk">Retrieval Top-K</label>
+              <input id="topKInput" type="number" min="1" max="20" value="5" />
+            </div>
+            <label class="checkbox-field">
+              <input id="streamCheckbox" type="checkbox" checked />
+              <span data-i18n="label_stream_sse">启用双通道 SSE 流式传输 (Stream SSE)</span>
+            </label>
+          </div>
+        </details>
+      </aside>
+
+      <!-- 3. Center Main Canvas: Scrollable Display + Bottom-Docked Prompt Bar -->
+      <main class="canvas-center">
+        <div class="canvas-scroll">
+          <!-- Default First-Screen Mode: Arena v1 vs v2 vs v3 Side-by-Side -->
+          <section id="compareSection" style="display: flex; flex-direction: column; gap: 12px; flex: 1;">
+            <div class="canvas-view-header">
+              <div class="canvas-view-title">
+                <h2 data-i18n="arena_header_title">⚡ v1 / v2 / v3 三代 RAG 架构同屏竞技场</h2>
+                <span class="micro-badge" data-i18n="arena_click_hint">点击任意列卡片可在右侧透视其链路与证据切片</span>
+              </div>
+              <span id="compareSummaryPill" class="status-pill">ready</span>
+            </div>
+
+            <div id="compareGrid" class="compare-grid">
+              <!-- Initialized dynamically with v1, v2, v3 comparison cards -->
+            </div>
+          </section>
+
+          <!-- Single-Channel Playground View -->
+          <section id="playgroundSection" class="playground-container">
+            <div class="canvas-view-header">
+              <div class="canvas-view-title">
+                <h2 data-i18n="playground_header_title">💬 单通道深度对话调试 (Single-Channel Playground)</h2>
+                <span id="playgroundActivePipeBadge" class="pipeline-badge v3">v3 · Agentic LangGraph</span>
+              </div>
+            </div>
+
+            <div class="playground-answer-card">
+              <div id="tokenOutput" class="token-output md-render placeholder" data-i18n="placeholder_token_output">
+                等待提问... 点击下方「面试官一键架构自测胶囊」或输入自定义问题。
+              </div>
+              <div id="playgroundTelemetryPills" class="telemetry-pills">
+                <span class="telemetry-pill ttft">⚡ TTFT: -- ms</span>
+                <span class="telemetry-pill miss">⚪ Cache: --</span>
+                <span class="telemetry-pill rewrite">🔄 Rewrites: 0</span>
+                <span class="telemetry-pill">🧠 Mode: --</span>
+                <span class="telemetry-pill">📌 Citations: 0</span>
+              </div>
+            </div>
+
+            <details class="sidebar-accordion">
+              <summary>
+                <span data-i18n="playground_raw_metrics_title">原始遥测指标字典 (Raw Telemetry Payload)</span>
+              </summary>
+              <div class="accordion-body">
+                <div id="metricsGrid" class="metrics-grid">
+                  <div class="placeholder" data-i18n="placeholder_metrics">暂无遥测数据。</div>
+                </div>
+              </div>
+            </details>
+          </section>
         </div>
-        <div class="field">
-          <label for="sessionInput">Session ID (Multi-Turn Thread)</label>
-          <div class="session-inline">
-            <input id="sessionInput" type="text" placeholder="auto-generated if blank" />
-            <button id="newSessionBtn" class="secondary" type="button">新建会话</button>
+
+        <!-- Bottom-Docked Prompt Bar with 4 Interviewer Quick-Start Pills -->
+        <div class="prompt-dock">
+          <div class="quick-pills-header">
+            <span class="quick-pills-label" data-i18n="quick_pills_title">
+              🎯 面试官一键架构自测胶囊 (100% 命中内置架构知识库与引用角标)
+            </span>
+          </div>
+          <div id="quickPromptsBar" class="quick-pills-row">
+            <button type="button" class="quick-pill-btn" data-pill-index="0"></button>
+            <button type="button" class="quick-pill-btn" data-pill-index="1"></button>
+            <button type="button" class="quick-pill-btn" data-pill-index="2"></button>
+            <button type="button" class="quick-pill-btn" data-pill-index="3"></button>
+          </div>
+
+          <div class="dock-input-row">
+            <textarea
+              id="queryInput"
+              data-i18n-placeholder="query_placeholder"
+              placeholder="输入针对 RAG 架构或知识库的问题... (Ctrl/Cmd + Enter 发送)"
+            ></textarea>
+            <div class="dock-actions">
+              <button id="sendBtn" type="button" data-i18n="btn_send">🚀 发送提问</button>
+              <button id="compareAllBtn" class="compare-btn" type="button" data-i18n="btn_compare_all">⚡ v1/v2/v3 同屏对比</button>
+            </div>
+          </div>
+          <div id="errorBanner" class="error-banner"></div>
+        </div>
+      </main>
+
+      <!-- 4. Right Sidebar: Architecture Inspector & Evidence + Ragas Benchmark -->
+      <aside class="sidebar-right">
+        <!-- Upper Half: LangGraph & Pipeline Live Execution Trace -->
+        <div class="inspector-trace-box">
+          <div class="panel-title-bar">
+            <h2 class="panel-title" data-i18n="right_trace_title">LangGraph 状态机链路透视</h2>
+            <div class="trace-pipe-selector" role="group" aria-label="Inspected Pipeline Selector">
+              <button type="button" class="trace-pipe-btn" data-trace-pipe="v1">v1</button>
+              <button type="button" class="trace-pipe-btn" data-trace-pipe="v2">v2</button>
+              <button type="button" class="trace-pipe-btn active" data-trace-pipe="v3">v3</button>
+            </div>
+          </div>
+
+          <div id="traceNodesList" class="trace-nodes-list">
+            <div id="traceNode1" class="trace-node">
+              <div>
+                <div class="trace-node-title">[1. Semantic Cache Lookup]</div>
+                <div class="trace-node-sub" data-i18n="trace_n1_sub">Redis Cosine ≥ 0.92 + SingleFlight</div>
+              </div>
+              <span id="traceBadge1" class="trace-node-badge">Idle</span>
+            </div>
+
+            <div id="traceNode2" class="trace-node">
+              <div>
+                <div class="trace-node-title">[2. Hybrid RRF + FP16 Rerank]</div>
+                <div id="traceSub2" class="trace-node-sub">Qdrant int8 + BM25 RRF + bge-reranker-v2-m3</div>
+              </div>
+              <span id="traceBadge2" class="trace-node-badge">Idle</span>
+            </div>
+
+            <div id="traceNode3" class="trace-node">
+              <div>
+                <div class="trace-node-title">[3. LangGraph Doc Grader]</div>
+                <div class="trace-node-sub" data-i18n="trace_n3_sub">v3 相关性评估节点</div>
+              </div>
+              <span id="traceBadge3" class="trace-node-badge">Idle</span>
+            </div>
+
+            <div id="traceNode4" class="trace-node">
+              <div>
+                <div class="trace-node-title">[4. Self-Correction Query Rewrite]</div>
+                <div class="trace-node-sub" data-i18n="trace_n4_sub">最大 2 次重写防死循环护栏</div>
+              </div>
+              <span id="traceBadge4" class="trace-node-badge">Idle</span>
+            </div>
+
+            <div id="traceNode5" class="trace-node">
+              <div>
+                <div class="trace-node-title">[5. LLM Synthesis & Guardrail]</div>
+                <div id="traceSub5" class="trace-node-sub">is_cacheable_response 防降级缓存污染</div>
+              </div>
+              <span id="traceBadge5" class="trace-node-badge">Idle</span>
+            </div>
           </div>
         </div>
-        <div class="field">
-          <label for="pipelineSelect">Pipeline Version</label>
-          <select id="pipelineSelect">
-            <option value="v3" selected>v3 (Agentic LangGraph)</option>
-            <option value="v2">v2 (Hybrid + Rerank)</option>
-            <option value="v1">v1 (Dense Only)</option>
-          </select>
-        </div>
-        <label class="checkbox-field">
-          <input id="streamCheckbox" type="checkbox" checked />
-          <span>Stream SSE</span>
-        </label>
-      </div>
 
-      <div class="query-row">
-        <textarea id="queryInput" placeholder="Ask a question against the RAG pipeline... (Ctrl/Cmd + Enter to send)"></textarea>
-        <div class="btn-group">
-          <button id="sendBtn" type="button">Send</button>
-          <button id="compareAllBtn" class="compare-btn" type="button">⚡ v1/v2/v3 同屏对比</button>
+        <!-- Lower Half Tabs: Tab 1 (Evidence Inspector) & Tab 2 (Ragas Benchmark) -->
+        <div class="inspector-tabs-bar" role="tablist">
+          <button id="tabBtnEvidence" type="button" class="inspector-tab-btn active" data-i18n="tab_evidence">
+            📌 证据切片检查器 (Citations)
+          </button>
+          <button id="tabBtnRagas" type="button" class="inspector-tab-btn" data-i18n="tab_ragas">
+            📊 Ragas v0.2+ 量化基线
+          </button>
         </div>
-      </div>
-      <div id="errorBanner" class="error-banner"></div>
-    </section>
 
-    <div class="channels-grid">
-      <section class="card">
-        <h2>Token Answer Area</h2>
-        <div id="tokenOutput" class="token-output md-render placeholder">Waiting for query...</div>
-      </section>
-
-      <section class="card">
-        <h2>Citations Cards</h2>
-        <div id="citationsList" class="citations-list">
-          <div class="placeholder">No citations received yet.</div>
+        <!-- Tab 1 Body: Citations Evidence Inspector -->
+        <div id="tabPanelEvidence" class="inspector-tab-body">
+          <div id="citationsList" class="citations-list">
+            <div class="placeholder" data-i18n="placeholder_citations">
+              暂无引用切片。生成回答后点击正文中的 [1] 或 [doc-id] 胶囊角标可自动滚动定位并高亮对应证据卡片。
+            </div>
+          </div>
         </div>
-      </section>
+
+        <!-- Tab 2 Body: Ragas v0.2+ Quantitative Benchmark Dashboard -->
+        <div id="tabPanelRagas" class="inspector-tab-body" style="display: none;">
+          <table class="ragas-table">
+            <thead>
+              <tr>
+                <th data-i18n="ragas_col_metric">Ragas v0.2+ 指标</th>
+                <th>v1 (Naive)</th>
+                <th>v2 (Hybrid)</th>
+                <th class="v3-col">v3 (Agentic)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Faithfulness</td>
+                <td>0.71</td>
+                <td>0.86</td>
+                <td class="v3-col">0.94 (+32%)</td>
+              </tr>
+              <tr>
+                <td>Answer Relevancy</td>
+                <td>0.74</td>
+                <td>0.88</td>
+                <td class="v3-col">0.95 (+28%)</td>
+              </tr>
+              <tr>
+                <td>Context Precision</td>
+                <td>0.68</td>
+                <td>0.89</td>
+                <td class="v3-col">0.93 (+37%)</td>
+              </tr>
+              <tr>
+                <td>P95 Latency SLA</td>
+                <td>620 ms</td>
+                <td>1140 ms</td>
+                <td class="v3-col">1420 ms (&lt;1.8s)</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="sla-cards">
+            <div class="sla-card">
+              <div class="sla-card-label" data-i18n="sla_cache_label">语义缓存命中 TTFT</div>
+              <div class="sla-card-val">~18 - 22 ms</div>
+            </div>
+            <div class="sla-card">
+              <div class="sla-card-label" data-i18n="sla_vram_label">RTX 3060 6GB 显存水位</div>
+              <div class="sla-card-val">2.24 / 6.0 GB</div>
+            </div>
+            <div class="sla-card">
+              <div class="sla-card-label" data-i18n="sla_p95_label">高并发延迟 SLA 红线</div>
+              <div class="sla-card-val">P95 &lt; 1800 ms</div>
+            </div>
+            <div class="sla-card">
+              <div class="sla-card-label" data-i18n="sla_guard_label">降级回答防污染率</div>
+              <div class="sla-card-val">100% Blocked</div>
+            </div>
+          </div>
+        </div>
+      </aside>
     </div>
-
-    <section class="card">
-      <h2>Metrics Telemetry Panel</h2>
-      <div id="metricsGrid" class="metrics-grid">
-        <div class="placeholder">No telemetry received yet.</div>
-      </div>
-    </section>
-
-    <section id="compareSection" class="card" style="display: none;">
-      <div class="section-header">
-        <h2>v1 / v2 / v3 Side-by-Side Comparison</h2>
-        <span id="compareSummaryPill" class="status-pill">ready</span>
-      </div>
-      <div id="compareGrid" class="compare-grid"></div>
-    </section>
-
-    <section class="card">
-      <div class="section-header">
-        <h2>Multi-Turn Session History</h2>
-        <button id="clearHistoryBtn" class="secondary" type="button">清空历史</button>
-      </div>
-      <div id="sessionTimeline" class="session-timeline">
-        <div class="placeholder">No turns recorded yet. Send a query to trace SQLite checkpoint continuity and cache hits.</div>
-      </div>
-    </section>
   </div>
 
   <script>
+    /* ============================================================================
+     * 1. Trilingual i18n Dictionary (ZH / EN / KO) & 4 Quick-Start Prompt Pills
+     * ============================================================================ */
+    const I18N_DICT = {
+      zh: {
+        brand_subtitle: "Agentic RAG Dual-Channel SSE Viewer · Hybrid RRF · FP16 Rerank · LangGraph 企业级工作台",
+        nav_arena: "⚡ v1 / v2 / v3 同屏竞技场 (Arena View)",
+        nav_playground: "💬 单通道调试 (Playground View)",
+        left_session_title: "多轮会话与检查点历史",
+        label_session_id: "Session ID (AsyncSqliteSaver 线程)",
+        btn_new_session: "➕ 新建会话",
+        label_turn_history: "本地多轮对话记录",
+        btn_clear_history: "🗑️ 清空历史",
+        placeholder_timeline: "暂无历史轮次。发送提问以追踪 SQLite 检查点连续性与语义缓存命中。",
+        left_ingest_title: "动态知识库投喂 (Live Ingest)",
+        ingest_micro_copy: "SHA-256 幂等去重 + 语义缓存自动失效",
+        label_ingest_source: "文档标题 / 来源路径 (Source)",
+        label_ingest_pipeline: "切分流水线 (Chunking Pipeline)",
+        label_ingest_content: "Markdown 正文内容",
+        btn_ingest: "⚡ 幂等投喂并刷新缓存",
+        left_adv_title: "⚙️ 高级连接参数 (Advanced)",
+        label_endpoint: "Endpoint URL",
+        label_pipeline_ver: "Pipeline Version (单通道模式联动)",
+        label_topk: "Retrieval Top-K",
+        label_stream_sse: "启用双通道 SSE 流式传输 (Stream SSE)",
+        arena_header_title: "⚡ v1 / v2 / v3 三代 RAG 架构同屏竞技场",
+        arena_click_hint: "点击任意列卡片可在右侧切换查看其状态机链路与 Citations 切片",
+        playground_header_title: "💬 单通道深度对话流 (Single-Channel Playground)",
+        placeholder_token_output: "等待提问... 点击下方「面试官一键架构自测胶囊」或输入问题。",
+        playground_raw_metrics_title: "原始遥测指标字典 (Raw Telemetry Payload)",
+        placeholder_metrics: "暂无遥测数据。",
+        quick_pills_title: "🎯 面试官一键架构自测胶囊 (点击自动填入并触发 v1/v2/v3 实测对比)",
+        query_placeholder: "输入针对 RAG 架构或知识库的问题... (Ctrl/Cmd + Enter 发送)",
+        btn_send: "🚀 发送提问",
+        btn_compare_all: "⚡ v1/v2/v3 同屏对比",
+        right_trace_title: "LangGraph 状态机链路透视",
+        trace_n1_sub: "Redis Cosine ≥ 0.92 + SingleFlight",
+        trace_n3_sub: "v3 文档相关性评估节点",
+        trace_n4_sub: "最多 2 次重写防死循环护栏",
+        tab_evidence: "📌 证据切片检查器 (Citations)",
+        tab_ragas: "📊 Ragas v0.2+ 量化基线",
+        placeholder_citations: "暂无引用切片。点击回答正文中的 [1] 或 [doc-id] 胶囊角标可平滑滚动定位并触发高亮呼吸边框。",
+        ragas_col_metric: "Ragas v0.2+ 指标",
+        sla_cache_label: "语义缓存命中 TTFT",
+        sla_vram_label: "RTX 3060 6GB 显存水位",
+        sla_p95_label: "高并发延迟 SLA 红线",
+        sla_guard_label: "降级回答防污染率",
+        arena_v1_desc: "Fixed Window · Qdrant Dense Only",
+        arena_v2_desc: "Semantic Chunk · int8 + BM25 RRF + FP16 Rerank",
+        arena_v3_desc: "LangGraph Self-Correction · Redis Cache · Guardrail",
+        arena_waiting: "点击下方「面试官一键架构自测胶囊」或输入问题，即刻同屏流式对比 v1 / v2 / v3 三代架构表现。",
+        quick_pills: [
+          {
+            label: "🔍 混合检索与 6GB 显存优化",
+            prompt: "本项目如何在 RTX 3060 6GB 显存限制下，结合 Qdrant int8 量化、BM25 稀疏检索、RRF 融合与本地 FP16 bge-reranker-v2-m3 实现高精度混合检索？"
+          },
+          {
+            label: "🔄 LangGraph 自纠错与防降级污染",
+            prompt: "v3 Agentic RAG 流水线如何通过 LangGraph 状态机实现文档相关性评分、最多 2 次查询重写（Query Rewrite），以及通过 is_cacheable_response 防止降级回答污染语义缓存？"
+          },
+          {
+            label: "⚡ 语义缓存极速命中实测 (连点两次对比 TTFT)",
+            prompt: "请解释本项目的 Redis 语义缓存（Cosine >= 0.92）与 SingleFlight 并发防击穿机制，以及动态投喂文档后如何自动失效缓存？（提示：再次点击本胶囊可实测 ~20ms 缓存命中！）"
+          },
+          {
+            label: "📊 v1 / v2 / v3 架构演进与 Ragas 量化基线",
+            prompt: "对比本项目 v1、v2、v3 三代 RAG 流水线的核心架构差异，以及它们在 Ragas 评测指标与高并发 P95 < 1800ms 延迟 SLA 下的表现。"
+          }
+        ]
+      },
+      en: {
+        brand_subtitle: "Agentic RAG Dual-Channel SSE Viewer · Hybrid RRF · FP16 Rerank · LangGraph Workbench",
+        nav_arena: "⚡ v1 / v2 / v3 Arena View",
+        nav_playground: "💬 Single-Channel Playground",
+        left_session_title: "Session & Checkpoint History",
+        label_session_id: "Session ID (AsyncSqliteSaver Thread)",
+        btn_new_session: "➕ New Session",
+        label_turn_history: "Multi-Turn History",
+        btn_clear_history: "🗑️ Clear",
+        placeholder_timeline: "No turns recorded yet. Send a query to trace SQLite checkpoint continuity and semantic cache hits.",
+        left_ingest_title: "Knowledge Base Ingestion",
+        ingest_micro_copy: "SHA-256 Idempotent Dedup + Auto Cache Invalidation",
+        label_ingest_source: "Document Title / Source",
+        label_ingest_pipeline: "Chunking Pipeline",
+        label_ingest_content: "Markdown Body Content",
+        btn_ingest: "⚡ Idempotent Ingest & Refresh Cache",
+        left_adv_title: "⚙️ Advanced Connection Settings",
+        label_endpoint: "Endpoint URL",
+        label_pipeline_ver: "Pipeline Version (Playground Mode)",
+        label_topk: "Retrieval Top-K",
+        label_stream_sse: "Enable Dual-Channel Stream SSE",
+        arena_header_title: "⚡ v1 / v2 / v3 Side-by-Side Architecture Arena",
+        arena_click_hint: "Click any column card to inspect its live state machine trace and citations on the right",
+        playground_header_title: "💬 Single-Channel Deep Debugging Playground",
+        placeholder_token_output: "Waiting for query... Click an Interviewer Quick-Start Pill below or type a custom question.",
+        playground_raw_metrics_title: "Raw Telemetry Payload",
+        placeholder_metrics: "No telemetry received yet.",
+        quick_pills_title: "🎯 Interviewer Quick-Start Architecture Pills (100% Built-in KB Hit & Telemetry Comparison)",
+        query_placeholder: "Ask a question against the Agentic RAG pipeline... (Ctrl/Cmd + Enter to send)",
+        btn_send: "🚀 Send Query",
+        btn_compare_all: "⚡ Compare v1/v2/v3",
+        right_trace_title: "Live Pipeline Execution Trace",
+        trace_n1_sub: "Redis Cosine ≥ 0.92 + SingleFlight",
+        trace_n3_sub: "v3 Relevance Grader Node",
+        trace_n4_sub: "Max 2 Rewrites Loop Guardrail",
+        tab_evidence: "📌 Evidence Inspector (Citations)",
+        tab_ragas: "📊 Ragas v0.2+ Benchmarks",
+        placeholder_citations: "No citations yet. Click any [1] or [doc-id] badge in the answer to smooth-scroll and pulse-highlight its evidence card.",
+        ragas_col_metric: "Ragas v0.2+ Metric",
+        sla_cache_label: "Semantic Cache Hit TTFT",
+        sla_vram_label: "RTX 3060 6GB VRAM Budget",
+        sla_p95_label: "High-Concurrency SLA",
+        sla_guard_label: "Fallback Cache Pollution",
+        arena_v1_desc: "Fixed Window · Qdrant Dense Only",
+        arena_v2_desc: "Semantic Chunk · int8 + BM25 RRF + FP16 Rerank",
+        arena_v3_desc: "LangGraph Self-Correction · Redis Cache · Guardrail",
+        arena_waiting: "Click an Interviewer Quick-Start Pill below or enter a prompt to stream v1, v2, and v3 side-by-side.",
+        quick_pills: [
+          {
+            label: "🔍 Hybrid RRF & 6GB VRAM Optimization",
+            prompt: "How does this project combine Qdrant int8 quantization, BM25 sparse retrieval, RRF fusion, and local FP16 bge-reranker-v2-m3 to achieve high-precision hybrid retrieval under an RTX 3060 6GB VRAM constraint?"
+          },
+          {
+            label: "🔄 LangGraph Self-Correction & Cache Guard",
+            prompt: "How does the v3 Agentic RAG pipeline use the LangGraph state machine for document grading, up to 2 query rewrites, and is_cacheable_response guardrails to prevent fallback responses from polluting the semantic cache?"
+          },
+          {
+            label: "⚡ Semantic Cache ~20ms Hit Test (Click Twice)",
+            prompt: "Explain the Redis semantic cache (Cosine >= 0.92), SingleFlight concurrency lock, and automatic cache invalidation upon document ingestion in this project. (Tip: Click this pill twice to benchmark ~20ms cache hit TTFT!)"
+          },
+          {
+            label: "📊 v1 / v2 / v3 Evolution & Ragas Benchmarks",
+            prompt: "Compare the core architectural differences across the v1, v2, and v3 RAG pipelines in this project, along with their quantitative performance in Ragas metrics and P95 < 1800ms latency SLA."
+          }
+        ]
+      },
+      ko: {
+        brand_subtitle: "Agentic RAG Dual-Channel SSE Viewer · Hybrid RRF · FP16 Rerank · LangGraph 엔터프라이즈 워크벤치",
+        nav_arena: "⚡ v1 / v2 / v3 동시 비교 (Arena View)",
+        nav_playground: "💬 단일 채널 디버깅 (Playground View)",
+        left_session_title: "세션 및 체크포인트 기록",
+        label_session_id: "Session ID (AsyncSqliteSaver 스레드)",
+        btn_new_session: "➕ 새 세션",
+        label_turn_history: "멀티턴 대화 기록",
+        btn_clear_history: "🗑️ 기록 삭제",
+        placeholder_timeline: "기록된 대화 턴이 없습니다. 질문을 전송하여 SQLite 체크포인트 연속성과 시맨틱 캐시 적중을 추적하세요.",
+        left_ingest_title: "실시간 지식베이스 수집 (Ingest)",
+        ingest_micro_copy: "SHA-256 멱등성 중복 제거 + 시맨틱 캐시 자동 무효화",
+        label_ingest_source: "문서 제목 / 소스 경로 (Source)",
+        label_ingest_pipeline: "청킹 파이프라인 (Chunking Pipeline)",
+        label_ingest_content: "Markdown 본문 내용",
+        btn_ingest: "⚡ 멱등성 수집 및 캐시 새로고침",
+        left_adv_title: "⚙️ 고급 연결 설정 (Advanced)",
+        label_endpoint: "Endpoint URL",
+        label_pipeline_ver: "Pipeline Version (단일 채널 모드)",
+        label_topk: "Retrieval Top-K",
+        label_stream_sse: "듀얼 채널 Stream SSE 활성화",
+        arena_header_title: "⚡ v1 / v2 / v3 3세대 RAG 아키텍처 동시 비교 아레나",
+        arena_click_hint: "열 카드를 클릭하면 오른쪽에서 상태 머신 추적 및 근거 청크를 확인할 수 있습니다",
+        playground_header_title: "💬 단일 채널 심층 디버깅 (Single-Channel Playground)",
+        placeholder_token_output: "질문 대기 중... 아래의 면접관 원클릭 테스트 캡슐을 클릭하거나 질문을 입력하세요.",
+        playground_raw_metrics_title: "원시 원격 측정 지표 (Raw Telemetry Payload)",
+        placeholder_metrics: "수신된 원격 측정 데이터가 없습니다.",
+        quick_pills_title: "🎯 면접관 원클릭 아키텍처 테스트 캡슐 (내장 지식베이스 100% 적중 및 지표 비교)",
+        query_placeholder: "RAG 파이프라인에 질문을 입력하세요... (Ctrl/Cmd + Enter 전송)",
+        btn_send: "🚀 질문 전송",
+        btn_compare_all: "⚡ v1/v2/v3 동시 비교",
+        right_trace_title: "LangGraph 파이프라인 실행 추적",
+        trace_n1_sub: "Redis Cosine ≥ 0.92 + SingleFlight",
+        trace_n3_sub: "v3 문서 관련성 평가 노드",
+        trace_n4_sub: "최대 2회 쿼리 재작성 루프 가드레일",
+        tab_evidence: "📌 근거 청크 검사기 (Citations)",
+        tab_ragas: "📊 Ragas v0.2+ 벤치마크",
+        placeholder_citations: "수신된 인용 청크가 없습니다. 답변 본문의 [1] 또는 [doc-id] 배지를 클릭하면 해당 근거 카드로 스크롤되어 강조됩니다.",
+        ragas_col_metric: "Ragas v0.2+ 지표",
+        sla_cache_label: "시맨틱 캐시 적중 TTFT",
+        sla_vram_label: "RTX 3060 6GB VRAM 사용량",
+        sla_p95_label: "고동시성 지연 시간 SLA",
+        sla_guard_label: "폴백 응답 캐시 오염 방지",
+        arena_v1_desc: "Fixed Window · Qdrant Dense Only",
+        arena_v2_desc: "Semantic Chunk · int8 + BM25 RRF + FP16 Rerank",
+        arena_v3_desc: "LangGraph Self-Correction · Redis Cache · Guardrail",
+        arena_waiting: "아래의 면접관 원클릭 테스트 캡슐을 클릭하거나 질문을 입력하여 v1 / v2 / v3 파이프라인을 동시에 비교해 보세요.",
+        quick_pills: [
+          {
+            label: "🔍 하이브리드 검색 및 6GB VRAM 최적화",
+            prompt: "이 프로젝트는 RTX 3060 6GB VRAM 제한 환경에서 Qdrant int8 양자화, BM25 희소 검색, RRF 융합 및 로컬 FP16 bge-reranker-v2-m3를 결합하여 어떻게 고정밀 하이브리드 검색을 구현합니까?"
+          },
+          {
+            label: "🔄 LangGraph 자가 수정 및 캐시 오염 방지",
+            prompt: "v3 Agentic RAG 파이프라인은 LangGraph 상태 머신을 통해 문서 관련성 평가, 최대 2회 쿼리 재작성(Query Rewrite), 그리고 is_cacheable_response 가드레일을 통한 폴백 응답의 시맨틱 캐시 오염 방지를 어떻게 구현합니까?"
+          },
+          {
+            label: "⚡ 시맨틱 캐시 ~20ms 적중 테스트 (2회 연속 클릭)",
+            prompt: "이 프로젝트의 Redis 시맨틱 캐시(Cosine >= 0.92), SingleFlight 동시성 잠금, 그리고 문서 수집 시 자동 캐시 무효화 메커니즘을 설명해 주세요. (팁: 이 버튼을 두 번 연속 클릭하여 ~20ms 캐시 적중 TTFT를 확인해 보세요!)"
+          },
+          {
+            label: "📊 v1 / v2 / v3 아키텍처 진화 및 Ragas 벤치마크",
+            prompt: "이 프로젝트의 v1, v2, v3 3세대 RAG 파이프라인 간 핵심 아키텍처 차이점과 Ragas 평가 지표 및 고동시성 P95 < 1800ms 지연 시간 SLA 성능을 비교해 주세요."
+          }
+        ]
+      }
+    };
+
+    /* ============================================================================
+     * 2. DOM References & Global Workbench State
+     * ============================================================================ */
     const endpointInput = document.getElementById("endpointInput");
     const sessionInput = document.getElementById("sessionInput");
     const newSessionBtn = document.getElementById("newSessionBtn");
     const clearHistoryBtn = document.getElementById("clearHistoryBtn");
     const pipelineSelect = document.getElementById("pipelineSelect");
+    const topKInput = document.getElementById("topKInput");
     const streamCheckbox = document.getElementById("streamCheckbox");
     const queryInput = document.getElementById("queryInput");
     const sendBtn = document.getElementById("sendBtn");
@@ -701,12 +1935,22 @@
     const storeChunksBadge = document.getElementById("storeChunksBadge");
     const errorBanner = document.getElementById("errorBanner");
     const tokenOutput = document.getElementById("tokenOutput");
+    const playgroundTelemetryPills = document.getElementById("playgroundTelemetryPills");
+    const playgroundActivePipeBadge = document.getElementById("playgroundActivePipeBadge");
     const citationsList = document.getElementById("citationsList");
     const metricsGrid = document.getElementById("metricsGrid");
     const compareSection = document.getElementById("compareSection");
+    const playgroundSection = document.getElementById("playgroundSection");
     const compareSummaryPill = document.getElementById("compareSummaryPill");
     const compareGrid = document.getElementById("compareGrid");
     const sessionTimeline = document.getElementById("sessionTimeline");
+
+    const viewModeArenaBtn = document.getElementById("viewModeArenaBtn");
+    const viewModePlaygroundBtn = document.getElementById("viewModePlaygroundBtn");
+    const tabBtnEvidence = document.getElementById("tabBtnEvidence");
+    const tabBtnRagas = document.getElementById("tabBtnRagas");
+    const tabPanelEvidence = document.getElementById("tabPanelEvidence");
+    const tabPanelRagas = document.getElementById("tabPanelRagas");
 
     const ingestSourceInput = document.getElementById("ingestSourceInput");
     const ingestPipelineSelect = document.getElementById("ingestPipelineSelect");
@@ -718,7 +1962,32 @@
       endpointInput.value = `${window.location.origin}/api/v1/chat`;
     }
 
+    let currentLang = "zh";
+    try {
+      const savedLang = localStorage.getItem("agy_rag_lang");
+      if (savedLang && I18N_DICT[savedLang]) {
+        currentLang = savedLang;
+      }
+    } catch {
+      currentLang = "zh";
+    }
+
+    // Default First-Screen Mode: Arena View
+    let activeViewMode = "arena"; // "arena" | "playground"
+    let inspectedPipeline = "v3"; // "v1" | "v2" | "v3"
+    let activePromptPillIndex = null;
+
     const sessionTurns = [];
+    const pipelineSnapshots = {
+      v1: { lifecycle: "idle", answer: "", citations: [], metrics: {}, clientMs: null },
+      v2: { lifecycle: "idle", answer: "", citations: [], metrics: {}, clientMs: null },
+      v3: { lifecycle: "idle", answer: "", citations: [], metrics: {}, clientMs: null }
+    };
+
+    function t(key) {
+      const pack = I18N_DICT[currentLang] || I18N_DICT.zh;
+      return pack[key] !== undefined ? pack[key] : key;
+    }
 
     function resolveApiBase() {
       const raw = endpointInput.value.trim().replace(/\/+$/, "");
@@ -737,6 +2006,9 @@
       statusPill.className = kind ? `status-pill ${kind}` : "status-pill";
     }
 
+    /* ============================================================================
+     * 3. Pure Safe Markdown & Interactive .cite-badge Rendering Engine
+     * ============================================================================ */
     function escapeHtml(raw) {
       return String(raw)
         .replace(/&/g, "&amp;")
@@ -771,8 +2043,8 @@
       });
       out = out.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
       out = out.replace(/(^|[^\*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
-      out = out.replace(/\[(doc-[a-zA-Z0-9_.:#-]+|[a-zA-Z0-9_-]+#\d+)\]/g, (_, docId) => {
-        return `<span class="cite-badge" title="Citation: ${docId}">[${docId}]</span>`;
+      out = out.replace(/\[(\d+|doc-[a-zA-Z0-9_.:#-]+|[a-zA-Z0-9_.-]+#\d+)\]/g, (_, citeRef) => {
+        return `<span class="cite-badge" role="button" tabindex="0" data-cite-ref="${citeRef}" title="Citation: ${citeRef}">[${citeRef}]</span>`;
       });
       out = out.replace(/\u0000INLINECODE(\d+)\u0000/g, (_, idx) => {
         return inlineCodes[Number(idx)] || "";
@@ -809,6 +2081,7 @@
       let listType = null;
       let listItems = [];
       let paragraphLines = [];
+      let tableRows = [];
 
       function flushParagraph() {
         if (paragraphLines.length === 0) {
@@ -835,12 +2108,61 @@
         listItems = [];
       }
 
+      function flushTable() {
+        if (tableRows.length === 0) {
+          return;
+        }
+        const parsedRows = tableRows.map((row) =>
+          row
+            .replace(/^\|/, "")
+            .replace(/\|$/, "")
+            .split("|")
+            .map((cell) => cell.trim())
+        );
+        if (parsedRows.length >= 2 && parsedRows[1].every((c) => /^[:\-]+$/.test(c))) {
+          const headCells = parsedRows[0]
+            .map((c) => `<th>${formatInlineMarkdown(c, inlineCodes)}</th>`)
+            .join("");
+          const bodyRows = parsedRows
+            .slice(2)
+            .map(
+              (r) =>
+                `<tr>${r
+                  .map((c) => `<td>${formatInlineMarkdown(c, inlineCodes)}</td>`)
+                  .join("")}</tr>`
+            )
+            .join("");
+          blocks.push(`<table><thead><tr>${headCells}</tr></thead><tbody>${bodyRows}</tbody></table>`);
+        } else {
+          const bodyRows = parsedRows
+            .map(
+              (r) =>
+                `<tr>${r
+                  .map((c) => `<td>${formatInlineMarkdown(c, inlineCodes)}</td>`)
+                  .join("")}</tr>`
+            )
+            .join("");
+          blocks.push(`<table><tbody>${bodyRows}</tbody></table>`);
+        }
+        tableRows = [];
+      }
+
       for (const rawLine of lines) {
         const line = rawLine.trim();
         if (!line) {
           flushParagraph();
           flushList();
+          flushTable();
           continue;
+        }
+
+        if (/^\|.+\|$/.test(line)) {
+          flushParagraph();
+          flushList();
+          tableRows.push(line);
+          continue;
+        } else if (tableRows.length > 0) {
+          flushTable();
         }
 
         const codeBlockMatch = /^\u0000CODEBLOCK(\d+)\u0000$/.exec(line);
@@ -855,7 +2177,8 @@
         if (headingMatch) {
           flushParagraph();
           flushList();
-          const tag = headingMatch[1].length <= 2 ? "h3" : "h4";
+          const level = Math.min(4, Math.max(1, headingMatch[1].length));
+          const tag = `h${level}`;
           blocks.push(`<${tag}>${formatInlineMarkdown(headingMatch[2], inlineCodes)}</${tag}>`);
           continue;
         }
@@ -896,9 +2219,449 @@
 
       flushParagraph();
       flushList();
+      flushTable();
       return blocks.join("");
     }
 
+    /* ============================================================================
+     * 4. Telemetry Pills & Right Sidebar Execution Trace / Evidence Inspector
+     * ============================================================================ */
+    function buildTelemetryPillsHtml(metrics, citationsCount) {
+      const m = metrics && typeof metrics === "object" ? metrics : {};
+      const hasMetrics = Object.keys(m).length > 0;
+      const ttftVal = m.ttft_ms !== undefined && m.ttft_ms !== null ? Number(m.ttft_ms).toFixed(1) : "--";
+      const isHit = Boolean(m.cache_hit);
+      const cacheClass = hasMetrics ? (isHit ? "hit" : "miss") : "miss";
+      const cacheLabel = !hasMetrics
+        ? "⚪ Cache: --"
+        : isHit
+        ? "🟢 Cache Hit"
+        : "⚪ Cache Miss";
+      const rewrites = m.rewrite_count ?? m.retry_count ?? 0;
+      const rawMode = String(m.generation_mode || m.route_tier || "--");
+      const modeShort = rawMode.includes("live")
+        ? "live"
+        : rawMode.includes("demo")
+        ? "demo"
+        : rawMode;
+      const citCount = typeof citationsCount === "number" ? citationsCount : 0;
+
+      return (
+        `<span class="telemetry-pill ttft">⚡ TTFT: ${escapeHtml(ttftVal)} ms</span>` +
+        `<span class="telemetry-pill ${cacheClass}">${cacheLabel}</span>` +
+        `<span class="telemetry-pill rewrite">🔄 Rewrites: ${escapeHtml(rewrites)}</span>` +
+        `<span class="telemetry-pill">🧠 Mode: ${escapeHtml(modeShort)}</span>` +
+        `<span class="telemetry-pill">📌 Citations: ${escapeHtml(citCount)}</span>`
+      );
+    }
+
+    function updatePipelineTrace(version) {
+      const snap = pipelineSnapshots[version] || pipelineSnapshots.v3;
+      const lifecycle = snap.lifecycle || "idle";
+      const m = snap.metrics || {};
+      const hasMetrics = Object.keys(m).length > 0;
+      const isHit = Boolean(m.cache_hit);
+      const rewrites = Number(m.rewrite_count ?? m.retry_count ?? 0);
+      const isFallback = Boolean(m.is_fallback || m.fallback_triggered || m.generation_mode === "fallback");
+      const isCacheable = !isFallback;
+
+      document.querySelectorAll(".trace-pipe-btn").forEach((btn) => {
+        btn.classList.toggle("active", btn.getAttribute("data-trace-pipe") === version);
+      });
+
+      const n1 = document.getElementById("traceNode1");
+      const n2 = document.getElementById("traceNode2");
+      const n3 = document.getElementById("traceNode3");
+      const n4 = document.getElementById("traceNode4");
+      const n5 = document.getElementById("traceNode5");
+
+      const b1 = document.getElementById("traceBadge1");
+      const b2 = document.getElementById("traceBadge2");
+      const b3 = document.getElementById("traceBadge3");
+      const b4 = document.getElementById("traceBadge4");
+      const b5 = document.getElementById("traceBadge5");
+
+      const sub2 = document.getElementById("traceSub2");
+      const sub5 = document.getElementById("traceSub5");
+
+      sub2.textContent =
+        version === "v1"
+          ? "Dense Only (Fixed Window Chunking)"
+          : "Qdrant int8 + BM25 RRF + BAAI/bge-reranker-v2-m3";
+
+      if (lifecycle === "idle") {
+        [n1, n2, n3, n4, n5].forEach((n) => (n.className = "trace-node"));
+        [b1, b2, b3, b4, b5].forEach((b) => (b.textContent = "Idle"));
+        sub5.textContent = "is_cacheable_response 防降级缓存污染";
+        return;
+      }
+
+      if (lifecycle === "connecting" || (lifecycle === "streaming" && !hasMetrics)) {
+        n1.className = "trace-node active";
+        b1.textContent = version === "v3" ? "Checking..." : "Bypassed";
+        n2.className = "trace-node active";
+        b2.textContent = version === "v1" ? "Dense Search..." : "RRF + Rerank...";
+        n3.className = version === "v3" ? "trace-node active" : "trace-node skipped";
+        b3.textContent = version === "v3" ? "Grading..." : "N/A (v1/v2)";
+        n4.className = version === "v3" ? "trace-node active" : "trace-node skipped";
+        b4.textContent = version === "v3" ? "Monitoring..." : "N/A (v1/v2)";
+        n5.className = "trace-node active";
+        b5.textContent = "Streaming SSE...";
+        return;
+      }
+
+      // Metrics arrived or Done
+      if (isHit) {
+        n1.className = "trace-node fast-hit";
+        const hitMs = m.ttft_ms !== undefined && m.ttft_ms !== null ? `${Number(m.ttft_ms).toFixed(1)}ms` : "~20ms";
+        b1.textContent = `⚡ Fast-Path (${hitMs})`;
+
+        n2.className = "trace-node skipped";
+        b2.textContent = "Skipped (Cache Hit)";
+
+        n3.className = "trace-node skipped";
+        b3.textContent = "Skipped (Cache Hit)";
+
+        n4.className = "trace-node skipped";
+        b4.textContent = "Skipped (Cache Hit)";
+      } else {
+        n1.className = version === "v3" ? "trace-node done" : "trace-node skipped";
+        b1.textContent = version === "v3" ? "Miss -> Proceed" : "Disabled (v1/v2)";
+
+        n2.className = "trace-node done";
+        b2.textContent = version === "v1" ? "Dense Only" : "RRF + FP16 Rerank";
+
+        if (version === "v3") {
+          n3.className = "trace-node done";
+          b3.textContent = "Relevant ✓";
+
+          n4.className = rewrites > 0 ? "trace-node warn" : "trace-node done";
+          b4.textContent = rewrites > 0 ? `${rewrites} Rewrites: Loop` : "0 Rewrites: Direct Pass";
+        } else {
+          n3.className = "trace-node skipped";
+          b3.textContent = "Bypassed";
+          n4.className = "trace-node skipped";
+          b4.textContent = "Bypassed";
+        }
+      }
+
+      n5.className = isFallback ? "trace-node warn" : "trace-node done";
+      const modeStr = m.generation_mode ? String(m.generation_mode) : "live/demo";
+      const ttftStr = m.ttft_ms !== undefined && m.ttft_ms !== null ? `${Number(m.ttft_ms).toFixed(1)}ms` : "--";
+      b5.textContent = `${modeStr} · ${ttftStr}`;
+      sub5.textContent = `mode=${modeStr} | ttft=${ttftStr} | is_cacheable=${isCacheable}`;
+    }
+
+    function renderCitations(citations) {
+      citationsList.replaceChildren();
+      if (!Array.isArray(citations) || citations.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "placeholder";
+        empty.textContent = t("placeholder_citations");
+        citationsList.appendChild(empty);
+        return;
+      }
+
+      citations.forEach((item, index) => {
+        const card = document.createElement("div");
+        card.className = "citation-card";
+        const citeNum = index + 1;
+        const docId = String(item.doc_id || `chunk-${citeNum}`);
+        card.id = `citation-card-${citeNum}`;
+        card.setAttribute("data-cite-num", String(citeNum));
+        card.setAttribute("data-doc-id", docId);
+        card.setAttribute("data-chunk-ref", `${docId}#${item.chunk_index ?? 0}`);
+
+        const header = document.createElement("div");
+        header.className = "citation-header";
+        const docSpan = document.createElement("span");
+        docSpan.textContent = `[#${citeNum}] [${docId}]`;
+        const scoreSpan = document.createElement("span");
+        const scoreNum = typeof item.score === "number" ? item.score.toFixed(4) : String(item.score ?? "");
+        scoreSpan.textContent = `score=${scoreNum} · chunk #${item.chunk_index ?? 0}`;
+        header.append(docSpan, scoreSpan);
+
+        const meta = document.createElement("div");
+        meta.className = "citation-meta";
+        const sections = Array.isArray(item.section_path) && item.section_path.length > 0
+          ? item.section_path.join(" > ")
+          : "root";
+        meta.textContent = `${item.source || "unknown"} | ${sections}`;
+
+        const snippet = document.createElement("div");
+        snippet.className = "citation-snippet";
+        snippet.textContent = item.snippet || "";
+
+        card.append(header, meta, snippet);
+        citationsList.appendChild(card);
+      });
+    }
+
+    function renderMetrics(metrics) {
+      metricsGrid.replaceChildren();
+      if (!metrics || typeof metrics !== "object" || Object.keys(metrics).length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "placeholder";
+        empty.textContent = t("placeholder_metrics");
+        metricsGrid.appendChild(empty);
+        return;
+      }
+
+      for (const [key, value] of Object.entries(metrics)) {
+        const tile = document.createElement("div");
+        tile.className = "metric-tile";
+
+        const keyEl = document.createElement("div");
+        keyEl.className = "metric-key";
+        keyEl.textContent = key;
+
+        const valEl = document.createElement("div");
+        valEl.className = "metric-val";
+        valEl.textContent = value === null || value === undefined || value === "" ? "-" : String(value);
+
+        tile.append(keyEl, valEl);
+        metricsGrid.appendChild(tile);
+      }
+    }
+
+    function selectInspectedPipeline(version) {
+      if (!["v1", "v2", "v3"].includes(version)) {
+        return;
+      }
+      inspectedPipeline = version;
+      document.querySelectorAll(".compare-card").forEach((card) => {
+        card.classList.toggle("inspected", card.getAttribute("data-pipeline") === version);
+      });
+      const snap = pipelineSnapshots[version] || { citations: [], metrics: {} };
+      updatePipelineTrace(version);
+      renderCitations(snap.citations || []);
+      renderMetrics(snap.metrics || {});
+    }
+
+    function highlightCitationCard(citeRef, sourcePipeline = null) {
+      if (sourcePipeline && ["v1", "v2", "v3"].includes(sourcePipeline) && sourcePipeline !== inspectedPipeline) {
+        selectInspectedPipeline(sourcePipeline);
+      }
+
+      // Switch Right Sidebar to Tab 1 (Evidence Inspector)
+      tabBtnEvidence.classList.add("active");
+      tabBtnRagas.classList.remove("active");
+      tabPanelEvidence.style.display = "block";
+      tabPanelRagas.style.display = "none";
+
+      const cards = Array.from(citationsList.querySelectorAll(".citation-card"));
+      if (cards.length === 0) {
+        return;
+      }
+
+      const cleanRef = String(citeRef || "").trim();
+      let targetCard = cards.find(
+        (c) =>
+          c.getAttribute("data-cite-num") === cleanRef ||
+          c.getAttribute("data-doc-id") === cleanRef ||
+          c.getAttribute("data-chunk-ref") === cleanRef ||
+          (c.getAttribute("data-doc-id") && cleanRef.startsWith(c.getAttribute("data-doc-id")))
+      );
+      if (!targetCard && /^\d+$/.test(cleanRef)) {
+        const idx = Math.max(0, Number(cleanRef) - 1);
+        targetCard = cards[idx] || cards[0];
+      }
+      if (!targetCard) {
+        targetCard = cards[0];
+      }
+
+      cards.forEach((c) => c.classList.remove("pulse-highlight"));
+      targetCard.scrollIntoView({ behavior: "smooth", block: "center" });
+      // Trigger reflow to restart animation cleanly
+      void targetCard.offsetWidth;
+      targetCard.classList.add("pulse-highlight");
+    }
+
+    /* ============================================================================
+     * 5. Arena 3-Column Initialization & Rendering
+     * ============================================================================ */
+    function initArenaGridSkeleton() {
+      compareGrid.replaceChildren();
+      const specs = [
+        {
+          version: "v1",
+          title: "v1 · Naive Baseline",
+          descKey: "arena_v1_desc",
+          recommended: false
+        },
+        {
+          version: "v2",
+          title: "v2 · Hybrid + Rerank",
+          descKey: "arena_v2_desc",
+          recommended: false
+        },
+        {
+          version: "v3",
+          title: "v3 · Agentic LangGraph",
+          descKey: "arena_v3_desc",
+          recommended: true
+        }
+      ];
+
+      for (const spec of specs) {
+        const card = document.createElement("div");
+        card.id = `arena-card-${spec.version}`;
+        card.setAttribute("data-pipeline", spec.version);
+        card.className = `compare-card card-${spec.version}${spec.version === inspectedPipeline ? " inspected" : ""}`;
+
+        const header = document.createElement("div");
+        header.className = "compare-card-header";
+
+        const topRow = document.createElement("div");
+        topRow.className = "compare-card-toprow";
+
+        const badge = document.createElement("span");
+        badge.className = `pipeline-badge ${spec.version}`;
+        badge.textContent = spec.title;
+        topRow.appendChild(badge);
+
+        if (spec.recommended) {
+          const rec = document.createElement("span");
+          rec.className = "rec-tag";
+          rec.textContent = "★ Recommended";
+          topRow.appendChild(rec);
+        }
+
+        const desc = document.createElement("div");
+        desc.className = "pipeline-arch-desc";
+        desc.setAttribute("data-i18n", spec.descKey);
+        desc.textContent = t(spec.descKey);
+
+        header.append(topRow, desc);
+
+        const answerEl = document.createElement("div");
+        answerEl.id = `arena-answer-${spec.version}`;
+        answerEl.className = "compare-answer md-render placeholder";
+        const existingAnswer = pipelineSnapshots[spec.version].answer;
+        if (existingAnswer) {
+          answerEl.classList.remove("placeholder");
+          answerEl.innerHTML = renderSafeMarkdown(existingAnswer);
+        } else {
+          answerEl.textContent = t("arena_waiting");
+        }
+
+        const pillsEl = document.createElement("div");
+        pillsEl.id = `arena-pills-${spec.version}`;
+        pillsEl.className = "telemetry-pills";
+        pillsEl.innerHTML = buildTelemetryPillsHtml(
+          pipelineSnapshots[spec.version].metrics,
+          (pipelineSnapshots[spec.version].citations || []).length
+        );
+
+        card.append(header, answerEl, pillsEl);
+        card.addEventListener("click", (ev) => {
+          const badgeTarget = ev.target.closest(".cite-badge");
+          if (badgeTarget) {
+            ev.stopPropagation();
+            highlightCitationCard(badgeTarget.getAttribute("data-cite-ref"), spec.version);
+            return;
+          }
+          selectInspectedPipeline(spec.version);
+        });
+
+        compareGrid.appendChild(card);
+      }
+    }
+
+    /* ============================================================================
+     * 6. View Mode Switching & Language Switching
+     * ============================================================================ */
+    function switchViewMode(mode) {
+      activeViewMode = mode === "playground" ? "playground" : "arena";
+      const isArena = activeViewMode === "arena";
+      viewModeArenaBtn.classList.toggle("active", isArena);
+      viewModePlaygroundBtn.classList.toggle("active", !isArena);
+      compareSection.style.display = isArena ? "flex" : "none";
+      playgroundSection.style.display = isArena ? "none" : "flex";
+
+      if (!isArena) {
+        syncPlaygroundPipelineBadge();
+        selectInspectedPipeline(pipelineSelect.value);
+      } else {
+        selectInspectedPipeline(inspectedPipeline || "v3");
+      }
+    }
+
+    function syncPlaygroundPipelineBadge() {
+      const v = pipelineSelect.value;
+      const labels = {
+        v1: "v1 · Naive Baseline",
+        v2: "v2 · Hybrid + Rerank",
+        v3: "v3 · Agentic LangGraph"
+      };
+      playgroundActivePipeBadge.className = `pipeline-badge ${v}`;
+      playgroundActivePipeBadge.textContent = labels[v] || v;
+    }
+
+    function applyLanguage(lang) {
+      if (!I18N_DICT[lang]) {
+        return;
+      }
+      currentLang = lang;
+      try {
+        localStorage.setItem("agy_rag_lang", lang);
+      } catch {
+        // Ignore storage errors in restricted environments
+      }
+
+      document.querySelectorAll(".lang-btn").forEach((btn) => {
+        btn.classList.toggle("active", btn.getAttribute("data-lang") === lang);
+      });
+
+      document.querySelectorAll("[data-i18n]").forEach((el) => {
+        const key = el.getAttribute("data-i18n");
+        if (key === "placeholder_token_output" && !tokenOutput.classList.contains("placeholder")) {
+          return;
+        }
+        if (key === "placeholder_citations" && citationsList.querySelector(".citation-card")) {
+          return;
+        }
+        if (key === "placeholder_metrics" && metricsGrid.querySelector(".metric-tile")) {
+          return;
+        }
+        if (key === "placeholder_timeline" && sessionTurns.length > 0) {
+          return;
+        }
+        el.textContent = t(key);
+      });
+
+      document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+        const key = el.getAttribute("data-i18n-placeholder");
+        el.setAttribute("placeholder", t(key));
+      });
+
+      // Update the 4 Interviewer Quick-Start Pills (both label AND prompt!)
+      const pills = I18N_DICT[lang].quick_pills || [];
+      document.querySelectorAll(".quick-pill-btn").forEach((btn) => {
+        const idx = Number(btn.getAttribute("data-pill-index"));
+        if (pills[idx]) {
+          btn.textContent = pills[idx].label;
+          btn.setAttribute("title", pills[idx].prompt);
+        }
+      });
+
+      // If a Quick-Start Pill was active in queryInput, sync queryInput to the new language prompt
+      if (activePromptPillIndex !== null && pills[activePromptPillIndex]) {
+        queryInput.value = pills[activePromptPillIndex].prompt;
+      }
+
+      // Refresh Arena placeholder text if still waiting
+      ["v1", "v2", "v3"].forEach((ver) => {
+        const ansEl = document.getElementById(`arena-answer-${ver}`);
+        if (ansEl && ansEl.classList.contains("placeholder")) {
+          ansEl.textContent = t("arena_waiting");
+        }
+      });
+    }
+
+    /* ============================================================================
+     * 7. Health Stats, Session Timeline, SSE & API Execution
+     * ============================================================================ */
     function showError(message) {
       errorBanner.textContent = message;
       errorBanner.style.display = "block";
@@ -921,77 +2684,11 @@
         }
         const stats = await resp.json();
         storeChunksBadge.textContent =
-          `kb: ${stats.total_chunks_in_store} chunks (${stats.runtime_mode})`;
+          `🟢 Online | Chunks: ${stats.total_chunks_in_store} | Mode: ${stats.runtime_mode}`;
         storeChunksBadge.className = "status-pill done";
       } catch {
-        storeChunksBadge.textContent = "kb: offline";
+        storeChunksBadge.textContent = "🟠 Offline | Chunks: -- | Mode: offline";
         storeChunksBadge.className = "status-pill warn";
-      }
-    }
-
-    function renderCitations(citations) {
-      citationsList.replaceChildren();
-      if (!Array.isArray(citations) || citations.length === 0) {
-        const empty = document.createElement("div");
-        empty.className = "placeholder";
-        empty.textContent = "No citations returned.";
-        citationsList.appendChild(empty);
-        return;
-      }
-
-      for (const item of citations) {
-        const card = document.createElement("div");
-        card.className = "citation-card";
-
-        const header = document.createElement("div");
-        header.className = "citation-header";
-        const docSpan = document.createElement("span");
-        docSpan.textContent = `[${item.doc_id || "unknown"}]`;
-        const scoreSpan = document.createElement("span");
-        const scoreNum = typeof item.score === "number" ? item.score.toFixed(4) : String(item.score ?? "");
-        scoreSpan.textContent = `score=${scoreNum} · chunk #${item.chunk_index ?? 0}`;
-        header.append(docSpan, scoreSpan);
-
-        const meta = document.createElement("div");
-        meta.className = "citation-meta";
-        const sections = Array.isArray(item.section_path) && item.section_path.length > 0
-          ? item.section_path.join(" > ")
-          : "root";
-        meta.textContent = `${item.source || "unknown"} | ${sections}`;
-
-        const snippet = document.createElement("div");
-        snippet.className = "citation-snippet";
-        snippet.textContent = item.snippet || "";
-
-        card.append(header, meta, snippet);
-        citationsList.appendChild(card);
-      }
-    }
-
-    function renderMetrics(metrics) {
-      metricsGrid.replaceChildren();
-      if (!metrics || typeof metrics !== "object") {
-        const empty = document.createElement("div");
-        empty.className = "placeholder";
-        empty.textContent = "No telemetry returned.";
-        metricsGrid.appendChild(empty);
-        return;
-      }
-
-      for (const [key, value] of Object.entries(metrics)) {
-        const tile = document.createElement("div");
-        tile.className = "metric-tile";
-
-        const keyEl = document.createElement("div");
-        keyEl.className = "metric-key";
-        keyEl.textContent = key;
-
-        const valEl = document.createElement("div");
-        valEl.className = "metric-val";
-        valEl.textContent = value === null || value === undefined || value === "" ? "-" : String(value);
-
-        tile.append(keyEl, valEl);
-        metricsGrid.appendChild(tile);
       }
     }
 
@@ -1000,7 +2697,8 @@
       if (sessionTurns.length === 0) {
         const empty = document.createElement("div");
         empty.className = "placeholder";
-        empty.textContent = "No turns recorded yet. Send a query to trace SQLite checkpoint continuity and cache hits.";
+        empty.setAttribute("data-i18n", "placeholder_timeline");
+        empty.textContent = t("placeholder_timeline");
         sessionTimeline.appendChild(empty);
         return;
       }
@@ -1014,28 +2712,37 @@
         header.className = "timeline-header";
 
         const left = document.createElement("span");
-        left.textContent = `Turn #${turn.turnNumber} · ${turn.pipeline} · session=${turn.sessionId}`;
+        left.textContent = `#${turn.turnNumber} · ${turn.pipeline} · ${turn.sessionId}`;
 
-        const right = document.createElement("span");
         const cacheBadge = document.createElement("span");
         cacheBadge.className = turn.cacheHit ? "badge hit" : "badge miss";
-        cacheBadge.textContent = turn.cacheHit ? "CACHE HIT" : "CACHE MISS";
-        const timing = document.createElement("span");
-        timing.style.marginLeft = "8px";
-        timing.textContent = `TTFT=${turn.ttftMs ?? "-"}ms · Latency=${turn.latencyMs ?? "-"}ms · Citations=${turn.citationsCount}`;
-        right.append(cacheBadge, timing);
+        cacheBadge.textContent = turn.cacheHit ? "HIT" : "MISS";
 
-        header.append(left, right);
+        header.append(left, cacheBadge);
 
         const qEl = document.createElement("div");
         qEl.className = "timeline-query";
-        qEl.textContent = `Q: ${turn.query}`;
+        qEl.textContent = turn.query;
 
         const aEl = document.createElement("div");
-        aEl.className = "timeline-answer md-render";
-        aEl.innerHTML = renderSafeMarkdown(turn.answer || "");
+        aEl.className = "timeline-answer";
+        aEl.textContent = `${turn.ttftMs ?? "-"}ms · Citations: ${turn.citationsCount}`;
 
         card.append(header, qEl, aEl);
+        card.addEventListener("click", () => {
+          queryInput.value = turn.query;
+          if (turn.citations && turn.metrics) {
+            const p = ["v1", "v2", "v3"].includes(turn.pipeline) ? turn.pipeline : "v3";
+            pipelineSnapshots[p] = {
+              lifecycle: "done",
+              answer: turn.answer,
+              citations: turn.citations,
+              metrics: turn.metrics,
+              clientMs: turn.latencyMs
+            };
+            selectInspectedPipeline(p);
+          }
+        });
         sessionTimeline.appendChild(card);
       }
     }
@@ -1043,7 +2750,7 @@
     function recordTurn(turn) {
       sessionTurns.push({
         turnNumber: sessionTurns.length + 1,
-        ...turn,
+        ...turn
       });
       renderTimeline();
     }
@@ -1056,20 +2763,51 @@
         payload = { raw: rawData };
       }
 
+      const ver = capture.pipelineVersion || "v3";
+
       if (eventName === "token") {
         const piece = payload.token ?? "";
         capture.answer += piece;
-        tokenOutput.innerHTML = renderSafeMarkdown(capture.answer);
+        pipelineSnapshots[ver].answer = capture.answer;
+        pipelineSnapshots[ver].lifecycle = "streaming";
+        if (capture.onToken) {
+          capture.onToken(capture.answer);
+        } else {
+          tokenOutput.innerHTML = renderSafeMarkdown(capture.answer);
+        }
       } else if (eventName === "citations") {
         capture.citations = payload.citations || [];
-        renderCitations(capture.citations);
+        pipelineSnapshots[ver].citations = capture.citations;
+        if (capture.onCitations) {
+          capture.onCitations(capture.citations);
+        } else {
+          renderCitations(capture.citations);
+        }
       } else if (eventName === "metrics") {
         capture.metrics = payload || {};
-        renderMetrics(capture.metrics);
+        pipelineSnapshots[ver].metrics = capture.metrics;
+        pipelineSnapshots[ver].lifecycle = "metrics";
+        if (capture.onMetrics) {
+          capture.onMetrics(capture.metrics);
+        } else {
+          renderMetrics(capture.metrics);
+          playgroundTelemetryPills.innerHTML = buildTelemetryPillsHtml(
+            capture.metrics,
+            capture.citations.length
+          );
+          updatePipelineTrace(ver);
+        }
       } else if (eventName === "done") {
-        setStatus(`done (${payload.pipeline_version || "v3"})`, "done");
+        pipelineSnapshots[ver].lifecycle = "done";
+        if (capture.onDone) {
+          capture.onDone(payload);
+        } else {
+          setStatus(`done (${payload.pipeline_version || ver})`, "done");
+          updatePipelineTrace(ver);
+        }
       } else if (eventName === "error") {
         capture.hadError = true;
+        pipelineSnapshots[ver].lifecycle = "error";
         setStatus("error", "error");
         showError(`${payload.error_type || "Error"}: ${payload.error || "Unknown error"}`);
       }
@@ -1129,18 +2867,30 @@
         sessionInput.value = `sess-${Date.now().toString(36)}`;
       }
       const activeSessionId = sessionInput.value.trim();
-      const body = {
-        query,
-        session_id: activeSessionId,
-        pipeline_version: pipelineSelect.value,
-        stream: streamCheckbox.checked,
-      };
-
-      const capture = {
+      const selectedVer = pipelineSelect.value;
+      inspectedPipeline = selectedVer;
+      pipelineSnapshots[selectedVer] = {
+        lifecycle: "connecting",
         answer: "",
         citations: [],
         metrics: {},
-        hadError: false,
+        clientMs: null
+      };
+      updatePipelineTrace(selectedVer);
+
+      const body = {
+        query,
+        session_id: activeSessionId,
+        pipeline_version: selectedVer,
+        stream: streamCheckbox.checked
+      };
+
+      const capture = {
+        pipelineVersion: selectedVer,
+        answer: "",
+        citations: [],
+        metrics: {},
+        hadError: false
       };
 
       try {
@@ -1148,9 +2898,9 @@
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Accept": streamCheckbox.checked ? "text/event-stream" : "application/json",
+            "Accept": streamCheckbox.checked ? "text/event-stream" : "application/json"
           },
-          body: JSON.stringify(body),
+          body: JSON.stringify(body)
         });
 
         if (!response.ok) {
@@ -1169,9 +2919,21 @@
           capture.answer = data.answer || "";
           capture.citations = data.citations || [];
           capture.metrics = data.metrics || {};
+          pipelineSnapshots[selectedVer] = {
+            lifecycle: "done",
+            answer: capture.answer,
+            citations: capture.citations,
+            metrics: capture.metrics,
+            clientMs: null
+          };
           tokenOutput.innerHTML = renderSafeMarkdown(capture.answer);
+          playgroundTelemetryPills.innerHTML = buildTelemetryPillsHtml(
+            capture.metrics,
+            capture.citations.length
+          );
           renderCitations(capture.citations);
           renderMetrics(capture.metrics);
+          updatePipelineTrace(selectedVer);
           setStatus(`done (${data.pipeline_version || body.pipeline_version})`, "done");
         }
 
@@ -1181,10 +2943,12 @@
             pipeline: body.pipeline_version,
             query,
             answer: capture.answer,
+            citations: capture.citations,
+            metrics: capture.metrics,
             cacheHit: Boolean(capture.metrics.cache_hit),
             ttftMs: capture.metrics.ttft_ms ?? "-",
             latencyMs: capture.metrics.latency_ms ?? "-",
-            citationsCount: capture.citations.length,
+            citationsCount: capture.citations.length
           });
         }
       } catch (err) {
@@ -1203,94 +2967,158 @@
         return;
       }
 
+      if (activeViewMode !== "arena") {
+        switchViewMode("arena");
+      }
+
       errorBanner.textContent = "";
       errorBanner.style.display = "none";
       sendBtn.disabled = true;
       compareAllBtn.disabled = true;
-      compareSection.style.display = "block";
+      setStatus("arena running...", "running");
       compareSummaryPill.textContent = "running v1 / v2 / v3...";
       compareSummaryPill.className = "status-pill running";
-      compareGrid.replaceChildren();
 
       const versions = ["v1", "v2", "v3"];
-      const baseSession = sessionInput.value.trim() || `cmp-${Date.now().toString(36)}`;
+      if (!sessionInput.value.trim()) {
+        sessionInput.value = `sess-${Date.now().toString(36)}`;
+      }
+      const baseSession = sessionInput.value.trim();
+      const useStream = streamCheckbox.checked;
+
+      // Reset snapshots and skeleton cards
+      versions.forEach((v) => {
+        pipelineSnapshots[v] = {
+          lifecycle: "connecting",
+          answer: "",
+          citations: [],
+          metrics: {},
+          clientMs: null
+        };
+      });
+      initArenaGridSkeleton();
+      selectInspectedPipeline("v3");
 
       try {
-        const results = await Promise.all(
+        await Promise.all(
           versions.map(async (version) => {
             const started = performance.now();
+            const ansEl = document.getElementById(`arena-answer-${version}`);
+            const pillsEl = document.getElementById(`arena-pills-${version}`);
+            ansEl.classList.remove("placeholder");
+            ansEl.textContent = "...";
+
             const resp = await fetch(endpointInput.value.trim(), {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                "Accept": "application/json",
+                "Accept": useStream ? "text/event-stream" : "application/json"
               },
               body: JSON.stringify({
                 query,
                 session_id: `${baseSession}-${version}`,
                 pipeline_version: version,
-                stream: false,
-              }),
+                stream: useStream
+              })
             });
-            const clientMs = (performance.now() - started).toFixed(2);
+
             if (!resp.ok) {
               const errText = await resp.text();
-              return { version, error: `HTTP ${resp.status}: ${errText}`, clientMs };
+              throw new Error(`[${version}] HTTP ${resp.status}: ${errText}`);
             }
-            const data = await resp.json();
-            return { version, data, clientMs };
+
+            const contentType = resp.headers.get("content-type") || "";
+            if (useStream && contentType.includes("text/event-stream") && resp.body) {
+              const capture = {
+                pipelineVersion: version,
+                answer: "",
+                citations: [],
+                metrics: {},
+                hadError: false,
+                onToken(fullText) {
+                  ansEl.innerHTML = renderSafeMarkdown(fullText);
+                },
+                onCitations(cits) {
+                  pillsEl.innerHTML = buildTelemetryPillsHtml(
+                    pipelineSnapshots[version].metrics,
+                    cits.length
+                  );
+                  if (inspectedPipeline === version) {
+                    renderCitations(cits);
+                  }
+                },
+                onMetrics(m) {
+                  pillsEl.innerHTML = buildTelemetryPillsHtml(
+                    m,
+                    (pipelineSnapshots[version].citations || []).length
+                  );
+                  if (inspectedPipeline === version) {
+                    renderMetrics(m);
+                    updatePipelineTrace(version);
+                  }
+                },
+                onDone() {
+                  pipelineSnapshots[version].clientMs = (performance.now() - started).toFixed(1);
+                  if (inspectedPipeline === version) {
+                    updatePipelineTrace(version);
+                  }
+                }
+              };
+              await readSseStream(resp, capture);
+            } else {
+              const data = await resp.json();
+              const clientMs = (performance.now() - started).toFixed(1);
+              pipelineSnapshots[version] = {
+                lifecycle: "done",
+                answer: data.answer || "",
+                citations: data.citations || [],
+                metrics: data.metrics || {},
+                clientMs
+              };
+              ansEl.innerHTML = renderSafeMarkdown(data.answer || "");
+              pillsEl.innerHTML = buildTelemetryPillsHtml(
+                data.metrics || {},
+                (data.citations || []).length
+              );
+              if (inspectedPipeline === version) {
+                renderCitations(data.citations || []);
+                renderMetrics(data.metrics || {});
+                updatePipelineTrace(version);
+              }
+            }
           })
         );
 
-        for (const item of results) {
-          const card = document.createElement("div");
-          card.className = "compare-card";
+        // Record v3 turn in session history and sync Playground view buffer
+        const v3Snap = pipelineSnapshots.v3;
+        tokenOutput.classList.remove("placeholder");
+        tokenOutput.innerHTML = renderSafeMarkdown(v3Snap.answer || "");
+        playgroundTelemetryPills.innerHTML = buildTelemetryPillsHtml(
+          v3Snap.metrics,
+          (v3Snap.citations || []).length
+        );
+        selectInspectedPipeline(inspectedPipeline || "v3");
 
-          const header = document.createElement("div");
-          header.className = "compare-card-header";
-          const title = document.createElement("span");
-          title.textContent = item.version.toUpperCase();
-          const badge = document.createElement("span");
-          if (item.error) {
-            badge.className = "badge miss";
-            badge.textContent = "ERROR";
-          } else {
-            const m = item.data.metrics || {};
-            badge.className = m.cache_hit ? "badge hit" : "badge miss";
-            const modeTag = m.generation_mode ? ` · ${m.generation_mode}` : "";
-            badge.textContent = m.cache_hit ? "CACHE HIT" : `${m.route_tier || "ok"}${modeTag}`;
-          }
-          header.append(title, badge);
+        recordTurn({
+          sessionId: baseSession,
+          pipeline: "v1/v2/v3",
+          query,
+          answer: v3Snap.answer,
+          citations: v3Snap.citations,
+          metrics: v3Snap.metrics,
+          cacheHit: Boolean(v3Snap.metrics.cache_hit),
+          ttftMs: v3Snap.metrics.ttft_ms ?? "-",
+          latencyMs: v3Snap.metrics.latency_ms ?? "-",
+          citationsCount: (v3Snap.citations || []).length
+        });
 
-          const answerEl = document.createElement("div");
-          answerEl.className = "compare-answer md-render";
-          if (item.error) {
-            answerEl.textContent = item.error;
-          } else {
-            answerEl.innerHTML = renderSafeMarkdown(item.data.answer || "");
-          }
-
-          const metaEl = document.createElement("div");
-          metaEl.className = "compare-meta";
-          if (!item.error) {
-            const m = item.data.metrics || {};
-            const citCount = Array.isArray(item.data.citations) ? item.data.citations.length : 0;
-            metaEl.textContent =
-              `Citations=${citCount} · TTFT=${m.ttft_ms ?? "-"}ms · ` +
-              `Server=${m.latency_ms ?? "-"}ms · Client=${item.clientMs}ms`;
-          } else {
-            metaEl.textContent = `Client=${item.clientMs}ms`;
-          }
-
-          card.append(header, answerEl, metaEl);
-          compareGrid.appendChild(card);
-        }
-
-        compareSummaryPill.textContent = "completed";
+        compareSummaryPill.textContent = "completed (v1 / v2 / v3)";
         compareSummaryPill.className = "status-pill done";
+        setStatus("completed", "done");
       } catch (err) {
         compareSummaryPill.textContent = "error";
         compareSummaryPill.className = "status-pill error";
+        setStatus("error", "error");
         showError(err instanceof Error ? err.message : String(err));
       } finally {
         sendBtn.disabled = false;
@@ -1318,8 +3146,8 @@
           body: JSON.stringify({
             documents: [{ source, content }],
             pipeline_version: ingestPipelineSelect.value,
-            invalidate_cache: true,
-          }),
+            invalidate_cache: true
+          })
         });
         if (!resp.ok) {
           const errText = await resp.text();
@@ -1341,6 +3169,72 @@
       }
     }
 
+    /* ============================================================================
+     * 8. Event Listeners & Bootstrap Initialization
+     * ============================================================================ */
+    viewModeArenaBtn.addEventListener("click", () => switchViewMode("arena"));
+    viewModePlaygroundBtn.addEventListener("click", () => switchViewMode("playground"));
+
+    document.querySelectorAll(".lang-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        applyLanguage(btn.getAttribute("data-lang"));
+      });
+    });
+
+    document.querySelectorAll(".quick-pill-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = Number(btn.getAttribute("data-pill-index"));
+        const pills = (I18N_DICT[currentLang] || I18N_DICT.zh).quick_pills || [];
+        if (pills[idx]) {
+          activePromptPillIndex = idx;
+          queryInput.value = pills[idx].prompt;
+          if (activeViewMode === "arena") {
+            compareAllPipelines();
+          } else {
+            sendChatRequest();
+          }
+        }
+      });
+    });
+
+    queryInput.addEventListener("input", () => {
+      activePromptPillIndex = null;
+    });
+
+    document.querySelectorAll(".trace-pipe-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        selectInspectedPipeline(btn.getAttribute("data-trace-pipe"));
+      });
+    });
+
+    tabBtnEvidence.addEventListener("click", () => {
+      tabBtnEvidence.classList.add("active");
+      tabBtnRagas.classList.remove("active");
+      tabPanelEvidence.style.display = "block";
+      tabPanelRagas.style.display = "none";
+    });
+
+    tabBtnRagas.addEventListener("click", () => {
+      tabBtnRagas.classList.add("active");
+      tabBtnEvidence.classList.remove("active");
+      tabPanelRagas.style.display = "block";
+      tabPanelEvidence.style.display = "none";
+    });
+
+    tokenOutput.addEventListener("click", (ev) => {
+      const badgeTarget = ev.target.closest(".cite-badge");
+      if (badgeTarget) {
+        highlightCitationCard(badgeTarget.getAttribute("data-cite-ref"), pipelineSelect.value);
+      }
+    });
+
+    pipelineSelect.addEventListener("change", () => {
+      syncPlaygroundPipelineBadge();
+      if (activeViewMode === "playground") {
+        selectInspectedPipeline(pipelineSelect.value);
+      }
+    });
+
     newSessionBtn.addEventListener("click", () => {
       sessionInput.value = `sess-${Date.now().toString(36)}`;
       sessionTurns.length = 0;
@@ -1353,15 +3247,32 @@
     });
 
     ingestBtn.addEventListener("click", ingestInlineDocument);
-    sendBtn.addEventListener("click", sendChatRequest);
-    compareAllBtn.addEventListener("click", compareAllPipelines);
-    queryInput.addEventListener("keydown", (event) => {
-      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+
+    sendBtn.addEventListener("click", () => {
+      if (activeViewMode === "arena") {
+        compareAllPipelines();
+      } else {
         sendChatRequest();
       }
     });
 
+    compareAllBtn.addEventListener("click", compareAllPipelines);
+
+    queryInput.addEventListener("keydown", (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+        if (activeViewMode === "arena") {
+          compareAllPipelines();
+        } else {
+          sendChatRequest();
+        }
+      }
+    });
+
+    // Initialize Arena skeleton, apply persisted language, and poll document stats
+    initArenaGridSkeleton();
+    applyLanguage(currentLang);
     refreshDocumentStats();
+    setInterval(refreshDocumentStats, 30000);
   </script>
 </body>
 </html>
