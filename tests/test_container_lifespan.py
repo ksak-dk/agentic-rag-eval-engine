@@ -343,3 +343,92 @@ async def test_v1_v2_v3_produce_differentiated_clean_outputs_and_auto_live_route
         )
     finally:
         await auto_live_container.shutdown()
+
+
+async def test_korean_and_chinese_adaptive_synthesis_and_citations(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Korean and Chinese queries emit localized v1/v2/v3 answers with [doc-...] citations and zero Chinese leakage in Korean mode."""
+    import re
+
+    from app.adapters.mock.router import detect_query_language
+    from app.graph.nodes import build_multilingual_system_prompt
+
+    assert (
+        detect_query_language("이 프로젝트는 RTX 3060 6GB VRAM 제한 환경에서 어떻게 동작합니까?")
+        == "ko"
+    )
+    assert detect_query_language("本项目如何在 RTX 3060 6GB 显存限制下实现高精度混合检索?") == "zh"
+    assert detect_query_language("How does Qdrant int8 hybrid retrieval work?") == "en"
+
+    ko_sys_prompt = build_multilingual_system_prompt("한국어 질문입니다")
+    assert "한국어(Korean)" in ko_sys_prompt
+    assert "[doc_id]" in ko_sys_prompt
+
+    _clear_cloud_env(monkeypatch, tmp_path)
+    app = create_app()
+
+    ko_pills = [
+        "이 프로젝트는 RTX 3060 6GB VRAM 제한 환경에서 Qdrant int8 양자화, BM25 희소 검색, RRF 융합 및 로컬 FP16 bge-reranker-v2-m3를 결합하여 어떻게 고정밀 하이브리드 검색을 구현합니까?",
+        "v3 Agentic RAG 파이프라인은 LangGraph 상태 머신을 통해 문서 관련성 평가, 최대 2회 쿼리 재작성(Query Rewrite), 그리고 is_cacheable_response 가드레일을 통한 폴백 응답의 시맨틱 캐시 오염 방지를 어떻게 구현합니까?",
+        "이 프로젝트의 Redis 시맨틱 캐시(Cosine >= 0.92), SingleFlight 동시성 잠금, 그리고 문서 수집 시 자동 캐시 무효화 메커니즘을 설명해 주세요. (팁: 이 버튼을 두 번 연속 클릭하여 ~20ms 캐시 적중 TTFT를 확인해 보세요!)",
+        "이 프로젝트의 v1, v2, v3 3세대 RAG 파이프라인 간 핵심 아키텍처 차이점과 Ragas 평가 지표 및 고동시성 P95 < 1800ms 지연 시간 SLA 성능을 비교해 주세요.",
+    ]
+    zh_char_re = re.compile(r"[\u4e00-\u9fff]")
+    ko_char_re = re.compile(r"[\uac00-\ud7af]")
+
+    async with lifespan(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            for idx, ko_query in enumerate(ko_pills):
+                for version in ("v1", "v2", "v3"):
+                    resp = await client.post(
+                        "/api/v1/chat",
+                        json={
+                            "query": ko_query,
+                            "session_id": f"ko-pill-{idx}-{version}",
+                            "pipeline_version": version,
+                            "stream": False,
+                        },
+                    )
+                    assert resp.status_code == 200
+                    body = resp.json()
+                    answer = body["answer"]
+                    assert ko_char_re.search(answer) is not None
+                    assert zh_char_re.search(answer) is None, (
+                        f"Chinese leaked in KO answer: {answer}"
+                    )
+                    assert "├──" not in answer
+                    assert "[doc-" in answer
+                    assert len(body["citations"]) >= 1
+                    for cit in body["citations"]:
+                        assert f"[{cit['doc_id']}]" in answer
+                        assert zh_char_re.search(cit["snippet"]) is None
+
+                    if version == "v1":
+                        assert "v1 베이스라인은 고정 길이 청킹" in answer
+                    elif version == "v2":
+                        assert "**하이브리드 검색 요약 (Hybrid Retrieval Summary):**" in answer
+                    else:
+                        assert "**에이전틱 종합 분석 (Agentic Synthesis):**" in answer
+                        assert (
+                            "**검증된 근거 및 컨텍스트 (Verified Evidence & Context):**" in answer
+                        )
+                        assert "**그라운딩 검증 (Grounding Check):**" in answer
+
+            zh_resp = await client.post(
+                "/api/v1/chat",
+                json={
+                    "query": "本项目如何在 RTX 3060 6GB 显存限制下实现高精度混合检索?",
+                    "session_id": "zh-v3-test",
+                    "pipeline_version": "v3",
+                    "stream": False,
+                },
+            )
+            assert zh_resp.status_code == 200
+            zh_answer = zh_resp.json()["answer"]
+            assert "**智能体综合分析:**" in zh_answer
+            assert "**已验证证据与上下文:**" in zh_answer
+            assert "**事实锚定校验:**" in zh_answer
+            assert "[doc-" in zh_answer

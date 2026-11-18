@@ -705,7 +705,7 @@ class _HashingTextEmbedder:
                 vectors.append(vec)
                 continue
 
-            words = re.findall(r"[a-z0-9_]+|[\u4e00-\u9fff]", cleaned)
+            words = re.findall(r"[a-z0-9_]+|[\u4e00-\u9fff]|[\uac00-\ud7af]+", cleaned)
             tokens: list[str] = list(words)
             for word in words:
                 if len(word) >= 3:

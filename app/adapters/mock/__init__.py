@@ -27,7 +27,7 @@ from app.adapters.mock.eval_heuristics import (
     truncate_words,
 )
 from app.adapters.mock.retriever import DEFAULT_FALLBACK_CORPUS, InMemoryHybridRetriever
-from app.adapters.mock.router import DemoLLMRouter
+from app.adapters.mock.router import DemoLLMRouter, detect_query_language
 
 __all__: Sequence[str] = [
     "BENCHMARK_CORPUS",
@@ -43,6 +43,7 @@ __all__: Sequence[str] = [
     "build_offline_sample_dicts",
     "clamp_score",
     "compute_percentile",
+    "detect_query_language",
     "heuristic_ragas_scorer",
     "offline_simulated_runner",
     "select_multi_hop_candidates",

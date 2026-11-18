@@ -28,7 +28,7 @@ from app.retrieval.chunker import (
 )
 from app.retrieval.hybrid_store import RetrievedChunk
 
-_TOKEN_RE: re.Pattern[str] = re.compile(r"[a-zA-Z0-9_.-]+|[\u4e00-\u9fff]")
+_TOKEN_RE: re.Pattern[str] = re.compile(r"[a-zA-Z0-9_.-]+|[\u4e00-\u9fff]|[\uac00-\ud7af]+")
 
 _BILINGUAL_EXPANSIONS: dict[str, tuple[str, ...]] = {
     "显存": ("vram", "3060", "fp16", "2.3", "6gb", "bge-m3"),
@@ -40,6 +40,30 @@ _BILINGUAL_EXPANSIONS: dict[str, tuple[str, ...]] = {
     "流式": ("sse", "stream", "token", "citations", "metrics"),
     "向量": ("vector", "dense", "sparse", "bm25", "int8"),
     "量化": ("quantization", "int8", "ragas", "benchmark"),
+}
+
+_KO_EXPANSIONS: dict[str, tuple[str, ...]] = {
+    "하이브리드": ("hybrid", "rrf", "bm25", "qdrant", "bge-reranker-v2-m3", "混合检索"),
+    "검색": ("retrieval", "search", "qdrant", "bm25", "rrf", "检索"),
+    "양자화": ("quantization", "int8", "qdrant", "量化"),
+    "희소": ("sparse", "bm25", "rrf", "稀疏"),
+    "융합": ("fusion", "rrf", "融合"),
+    "자가": ("self-correcting", "langgraph", "stategraph", "rewrite", "自纠错"),
+    "수정": ("self-correcting", "rewrite", "max_retries", "自纠错"),
+    "재작성": ("rewrite", "query_rewrite", "max_retries", "重写"),
+    "가드레일": ("guardrail", "is_cacheable_response", "fallback", "缓存"),
+    "폴백": ("fallback", "is_cacheable_response", "cache", "降级"),
+    "오염": ("pollution", "is_cacheable_response", "cache", "缓存"),
+    "시맨틱": ("semantic", "cache", "redis", "cosine", "0.92", "语义缓存"),
+    "캐시": ("cache", "redis", "cosine", "0.92", "singleflight", "缓存"),
+    "동시성": ("concurrency", "singleflight", "load", "sla", "并发"),
+    "무효화": ("invalidate", "invalidation", "ingest", "cache", "失效"),
+    "수집": ("ingest", "ingestion", "sha256", "投喂"),
+    "아키텍처": ("architecture", "v1", "v2", "v3", "langgraph", "架构"),
+    "진화": ("evolution", "v1", "v2", "v3", "ragas", "演进"),
+    "벤치마크": ("benchmark", "ragas", "p95", "1800", "sla", "评测"),
+    "지표": ("metrics", "ragas", "faithfulness", "recall", "precision", "评测"),
+    "지연": ("latency", "p95", "1800", "ttft", "sla", "延迟"),
 }
 
 DEFAULT_FALLBACK_CORPUS: str = """# agentic-rag-eval-engine Architecture Overview
@@ -65,7 +89,7 @@ FastAPI `POST /api/v1/chat` streams dual-channel SSE events (`token`, `citations
 
 
 def _tokenize_text(text: str) -> list[str]:
-    """Tokenize multilingual text into normalized terms with bilingual expansion."""
+    """Tokenize multilingual text into normalized terms with bilingual/trilingual expansion."""
     raw_tokens = _TOKEN_RE.findall(text.lower())
     tokens: list[str] = []
     cjk_chars: list[str] = []
@@ -73,6 +97,11 @@ def _tokenize_text(text: str) -> list[str]:
         if "\u4e00" <= tok <= "\u9fff":
             cjk_chars.append(tok)
             tokens.append(tok)
+        elif "\uac00" <= tok[0] <= "\ud7af":
+            tokens.append(tok)
+            for ko_key, ko_exp in _KO_EXPANSIONS.items():
+                if ko_key in tok:
+                    tokens.extend(ko_exp)
         else:
             tokens.append(tok)
             if len(tok) >= 4:

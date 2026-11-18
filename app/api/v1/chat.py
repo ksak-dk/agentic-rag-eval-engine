@@ -43,6 +43,8 @@ from app.graph.nodes import (
     GraphDependencies,
     _extract_citations,
     _format_context_block,
+    build_multilingual_system_prompt,
+    detect_query_language,
 )
 from app.graph.state import (
     Citation,
@@ -311,16 +313,15 @@ def _build_rag_messages(query: str, docs: list[RetrievedChunk]) -> list[tuple[st
         return [
             (
                 "system",
-                "Answer the user question using ONLY the provided context snippets. "
-                "Cite supporting sources inline using their exact [doc_id] tag.",
+                build_multilingual_system_prompt(query),
             ),
             ("user", f"Question: {query}\n\nContext:\n{context_block}"),
         ]
     return [
         (
             "system",
-            "Answer the user question concisely. If insufficient context is available, "
-            "state that clearly.",
+            "Answer the user question concisely in the exact same language as the user question. "
+            "If insufficient context is available, state that clearly.",
         ),
         ("user", f"Question: {query}"),
     ]
@@ -845,6 +846,7 @@ __all__: Sequence[str] = [
     "HealthResponse",
     "PipelineLiteral",
     "chat_endpoint",
+    "detect_query_language",
     "get_api_settings",
     "get_chat_dependencies",
     "get_checkpoint_db",

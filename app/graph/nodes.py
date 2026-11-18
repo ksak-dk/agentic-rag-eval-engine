@@ -46,7 +46,41 @@ FALLBACK_ANSWER: str = (
 )
 
 _DOC_TAG_RE: re.Pattern[str] = re.compile(r"\[([^\[\]\s]+)\]")
-_WORD_RE: re.Pattern[str] = re.compile(r"[a-zA-Z0-9_\u4e00-\u9fff]+")
+_WORD_RE: re.Pattern[str] = re.compile(r"[a-zA-Z0-9_\u4e00-\u9fff\uac00-\ud7af]+")
+_KO_DETECT_RE: re.Pattern[str] = re.compile(r"[\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]")
+_ZH_DETECT_RE: re.Pattern[str] = re.compile(r"[\u4e00-\u9fff]")
+
+
+def detect_query_language(query: str) -> str:
+    """Detect whether a user query is Korean ('ko'), Chinese ('zh'), or English ('en')."""
+    if _KO_DETECT_RE.search(query):
+        return "ko"
+    if _ZH_DETECT_RE.search(query):
+        return "zh"
+    return "en"
+
+
+def build_multilingual_system_prompt(query: str) -> str:
+    """Build a language-aligned generation system prompt preserving [doc_id] citations."""
+    lang = detect_query_language(query)
+    base = (
+        "Answer the user question using ONLY the provided context snippets. "
+        "Cite supporting sources inline using their exact [doc_id] tag. "
+        "You MUST respond strictly in the exact same language as the user question."
+    )
+    if lang == "ko":
+        return (
+            f"{base} "
+            "사용자의 질문이 한국어(Korean)이므로, 제공된 컨텍스트(Context)에 중국어나 영어가 포함되어 있더라도 "
+            "모든 기술적 사실과 수치를 자연스럽고 전문적인 한국어로 완벽히 번역 및 종합하여 답변하십시오. "
+            "답변 본문에 중국어 원문 단락을 그대로 복사하지 마시고, 인용 태그 [doc_id]만 정확히 유지하십시오."
+        )
+    if lang == "zh":
+        return (
+            f"{base} "
+            "用户提问为中文, 请严格使用专业、流畅的简体中文综合回答, 并准确保留 [doc_id] 格式的内联引用标签。"
+        )
+    return base
 
 
 # ---------------------------------------------------------------------------
@@ -130,14 +164,28 @@ def _format_context_block(chunks: list[RetrievedChunk]) -> str:
     return "\n\n---\n\n".join(blocks)
 
 
-def _chunk_to_citation(chunk: RetrievedChunk) -> Citation:
+def _chunk_to_citation(chunk: RetrievedChunk, *, lang: str = "en") -> Citation:
+    raw_snippet = chunk.text[:240]
+    section_list = list(chunk.metadata.section_path)
+    if lang == "ko":
+        from app.adapters.mock.router import DemoLLMRouter
+
+        ko_label, ko_snippet = DemoLLMRouter.localize_chunk_for_ko(
+            chunk.metadata.doc_id,
+            chunk.metadata.source,
+            " > ".join(section_list),
+            raw_snippet,
+        )
+        raw_snippet = ko_snippet[:240]
+        if ko_label:
+            section_list = [ko_label]
     return Citation(
         doc_id=chunk.metadata.doc_id,
         source=chunk.metadata.source,
-        section_path=list(chunk.metadata.section_path),
+        section_path=section_list,
         chunk_index=chunk.metadata.chunk_index,
         score=float(chunk.score),
-        snippet=chunk.text[:240],
+        snippet=raw_snippet,
     )
 
 
@@ -146,6 +194,7 @@ def _extract_citations(answer: str, docs: list[RetrievedChunk]) -> tuple[str, li
     if not docs:
         return answer, []
 
+    lang = detect_query_language(answer)
     by_doc_id: dict[str, RetrievedChunk] = {}
     for doc in docs:
         if doc.metadata.doc_id not in by_doc_id:
@@ -157,13 +206,13 @@ def _extract_citations(answer: str, docs: list[RetrievedChunk]) -> tuple[str, li
             matched_ids.append(tag)
 
     if matched_ids:
-        citations = [_chunk_to_citation(by_doc_id[doc_id]) for doc_id in matched_ids]
+        citations = [_chunk_to_citation(by_doc_id[doc_id], lang=lang) for doc_id in matched_ids]
         return answer, citations
 
     # Ensure provenance is never lost when LLM omits explicit bracket tags (e.g. mock mode).
     top_doc = docs[0]
     annotated_answer = f"{answer.rstrip()} [{top_doc.metadata.doc_id}]".strip()
-    return annotated_answer, [_chunk_to_citation(top_doc)]
+    return annotated_answer, [_chunk_to_citation(top_doc, lang=lang)]
 
 
 def _parse_cached_citations(raw_citations: Any) -> list[Citation]:
@@ -384,8 +433,7 @@ async def generate_node(state: RAGGraphState, deps: GraphDependencies) -> dict[s
     messages = [
         (
             "system",
-            "Answer the user question using ONLY the provided context snippets. "
-            "Cite supporting sources inline using their exact [doc_id] tag.",
+            build_multilingual_system_prompt(query),
         ),
         (
             "user",
@@ -624,8 +672,10 @@ __all__: Sequence[str] = [
     "HallucinationGradeOutput",
     "QueryRewriteOutput",
     "bind_nodes",
+    "build_multilingual_system_prompt",
     "cache_lookup_node",
     "cache_write_node",
+    "detect_query_language",
     "fallback_node",
     "generate_node",
     "grade_documents_node",
