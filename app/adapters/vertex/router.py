@@ -166,6 +166,41 @@ class VertexAIRouter:
         )
         return self._client
 
+    def get_chat_model(
+        self,
+        tier: Any = None,
+        *,
+        temperature: float = 0.0,
+        with_fallback: bool = False,
+    ) -> Any:
+        """Return a Vertex AI-backed ``ChatGoogleGenerativeAI`` instance for Ragas/LangChain."""
+        _ = (tier, with_fallback)
+        if not self._settings.use_vertex_ai:
+            raise VertexAIRouterError(
+                "Vertex AI routing is disabled (USE_VERTEX_AI=false); refusing paid invocation."
+            )
+        if not self.has_valid_credentials():
+            raise VertexAIRouterError(
+                "Vertex AI is enabled but GCP credentials or vertex_project_id are unavailable."
+            )
+
+        try:
+            from langchain_google_genai import ChatGoogleGenerativeAI
+        except ImportError as exc:  # pragma: no cover - defensive guard
+            raise VertexAIRouterError(
+                "langchain-google-genai package is required for Vertex AI chat models."
+            ) from exc
+
+        project_id = (self._settings.vertex_project_id or "").strip()
+        return ChatGoogleGenerativeAI(
+            model=self._model_name,
+            vertexai=True,
+            project=project_id,
+            location=self._location,
+            temperature=temperature,
+            max_retries=2,
+        )
+
     @staticmethod
     def _extract_response_text(response: Any) -> str:
         if response is None:

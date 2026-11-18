@@ -630,6 +630,7 @@ def build_mock_load_test_app(
     settings = Settings(
         groq_api_key="load-test-groq-key",
         google_api_key="load-test-google-key",
+        use_vertex_ai=False,
         pipeline_version=ConfigPipelineVersion.V3,
         runtime_mode="test",
         mock_llm_stream=mock_llm_stream,

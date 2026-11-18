@@ -387,13 +387,14 @@ async def grade_documents_node(state: RAGGraphState, deps: GraphDependencies) ->
         if deps.document_grader is not None:
             return bool(await deps.document_grader(active_query, chunk))
 
+        formatted_doc = _format_context_entries([chunk])[0]
         messages = [
             (
                 "system",
                 "You are a retrieval grader. Determine whether the document chunk contains "
                 "information relevant to answering the user query.",
             ),
-            ("user", f"Query: {active_query}\n\nDocument:\n{chunk.text}"),
+            ("user", f"Query: {active_query}\n\nDocument:\n{formatted_doc}"),
         ]
         try:
             verdict = await deps.router.ainvoke_structured(
@@ -408,7 +409,7 @@ async def grade_documents_node(state: RAGGraphState, deps: GraphDependencies) ->
                 doc_id=chunk.metadata.doc_id,
                 error_type=type(exc).__name__,
             )
-            return _lexical_relevance_fallback(active_query, chunk.text)
+            return _lexical_relevance_fallback(active_query, formatted_doc)
 
     async with log_stage_latency("grade_documents", candidate_count=len(docs)):
         verdicts = await asyncio.gather(*(_grade_chunk(chunk) for chunk in docs))

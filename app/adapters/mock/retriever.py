@@ -168,11 +168,12 @@ class InMemoryHybridRetriever:
         tokenized_docs: list[tuple[RetrievedChunk, Counter[str], str]] = []
         for chunk in chunks:
             header_text = " ".join(chunk.metadata.section_path)
-            tokens = _tokenize_text(f"{header_text} {chunk.text}")
+            metadata_text = f"{chunk.metadata.doc_id} {chunk.metadata.source} {header_text}".strip()
+            tokens = _tokenize_text(f"{metadata_text} {chunk.text}")
             counts = Counter(tokens)
             for term in counts:
                 doc_freq[term] += 1
-            tokenized_docs.append((chunk, counts, header_text.lower()))
+            tokenized_docs.append((chunk, counts, metadata_text.lower()))
 
         total_docs = max(1, len(tokenized_docs))
         self._idf = {

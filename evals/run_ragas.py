@@ -36,16 +36,32 @@ from ragas.metrics import (
 )
 from ragas.run_config import RunConfig
 
+from app.adapters.mock import DemoLLMRouter, InMemoryHybridRetriever
 from app.adapters.mock.eval_heuristics import (
+    BENCHMARK_CORPUS,
+    build_offline_dataset,
     clamp_score,
     compute_percentile,
     heuristic_ragas_scorer,
     offline_simulated_runner,
 )
+from app.adapters.vertex.router import (
+    VertexAIRouter,
+    VertexAIRouterError,
+    has_valid_vertex_credentials,
+)
 from app.core.config import Settings, get_settings
+from app.core.container import has_valid_cloud_api_keys
 from app.core.router import LLMRouter, RouteTier, TaskType
-from app.graph.nodes import GraphDependencies, _format_context_block
+from app.graph.nodes import (
+    GraphDependencies,
+    _format_context_block,
+    _format_context_entries,
+    detect_query_language,
+)
 from app.graph.workflow import AgenticRAGWorkflow
+from app.retrieval.chunker import make_chunker
+from app.retrieval.hybrid_store import RetrievedChunk
 from evals.dataset_gen import EvalSample, HopType, load_dataset_jsonl
 
 logger = structlog.get_logger(__name__)
@@ -179,15 +195,33 @@ def build_judge_llm(
     *,
     router: Any | None = None,
     settings: Settings | None = None,
+    vertex_router: VertexAIRouter | None = None,
 ) -> LangchainLLMWrapper:
     """Wrap the cloud strong-route chat model (`gemini-2.5-flash`) for Ragas."""
-    resolved_router = router
-    if resolved_router is None:
-        resolved_settings = settings or _try_get_settings()
-        if resolved_settings is None:
-            raise ValueError("Valid 'settings' or 'router' is required to construct Judge LLM.")
-        resolved_router = LLMRouter(settings=resolved_settings)
+    if router is not None:
+        chat_model = router.get_chat_model(
+            RouteTier.STRONG,
+            temperature=0.0,
+            with_fallback=False,
+        )
+        return LangchainLLMWrapper(chat_model)
 
+    resolved_settings = settings or _try_get_settings()
+    if resolved_settings is None:
+        raise ValueError("Valid 'settings' or 'router' is required to construct Judge LLM.")
+
+    if resolved_settings.use_vertex_ai:
+        active_vertex = vertex_router or VertexAIRouter(settings=resolved_settings)
+        if active_vertex.has_valid_credentials():
+            chat_model = active_vertex.get_chat_model(temperature=0.0)
+            return LangchainLLMWrapper(chat_model, bypass_n=True)
+        logger.warning(
+            "USE_VERTEX_AI is enabled but Vertex AI credentials or project ID are unavailable; "
+            "falling back to standard LLMRouter for Ragas Judge",
+            project_id=resolved_settings.vertex_project_id,
+        )
+
+    resolved_router = LLMRouter(settings=resolved_settings)
     chat_model = resolved_router.get_chat_model(
         RouteTier.STRONG,
         temperature=0.0,
@@ -265,6 +299,7 @@ class RagasPipelineEvaluator:
         runner: PipelineRunner | None = None,
         scorer: SampleScorer | None = None,
         router: Any | None = None,
+        vertex_router: VertexAIRouter | None = None,
         settings: Settings | None = None,
         run_config: RunConfig | None = None,
         max_concurrency: int = 2,
@@ -282,6 +317,7 @@ class RagasPipelineEvaluator:
 
         self._settings = settings if settings is not None else _try_get_settings()
         self._router = router
+        self._vertex_router = vertex_router
         self._retriever = retriever
         self._cache = cache
         self._checkpoint_db = checkpoint_db
@@ -296,8 +332,12 @@ class RagasPipelineEvaluator:
         self._judge_llm = judge_llm
         self._ragas_metrics: list[Any] | None = None
 
-        self._judge_model_name = (
+        active_vertex = self._resolve_active_vertex_router()
+        base_model = (
             self._settings.strong_llm_model if self._settings is not None else "gemini-2.5-flash"
+        )
+        self._judge_model_name = (
+            f"vertex-ai/{active_vertex.model_name}" if active_vertex is not None else base_model
         )
 
     @property
@@ -308,11 +348,28 @@ class RagasPipelineEvaluator:
     def max_concurrency(self) -> int:
         return self._max_concurrency
 
+    def _resolve_active_vertex_router(self) -> VertexAIRouter | None:
+        if self._settings is None or not self._settings.use_vertex_ai:
+            return None
+        candidate = self._vertex_router or VertexAIRouter(settings=self._settings)
+        if candidate.has_valid_credentials():
+            return candidate
+        logger.warning(
+            "USE_VERTEX_AI is enabled but Vertex AI credentials or project ID are unavailable",
+            project_id=self._settings.vertex_project_id,
+        )
+        return None
+
     def _get_or_init_ragas_metrics(self) -> list[Any]:
         if self._ragas_metrics is None:
             judge = self._judge_llm
             if judge is None:
-                judge = build_judge_llm(router=self._router, settings=self._settings)
+                judge_router = self._router if hasattr(self._router, "get_chat_model") else None
+                judge = build_judge_llm(
+                    router=judge_router,
+                    settings=self._settings,
+                    vertex_router=self._resolve_active_vertex_router(),
+                )
                 self._judge_llm = judge
             self._ragas_metrics = build_ragas_metrics(judge)
         return self._ragas_metrics
@@ -331,6 +388,7 @@ class RagasPipelineEvaluator:
         top_k = self._settings.retrieval_top_k if self._settings is not None else 5
         top_n = self._settings.retrieval_top_n if self._settings is not None else 20
         max_retries = self._settings.max_retries if self._settings is not None else 2
+        active_vertex = self._resolve_active_vertex_router()
         start = time.perf_counter()
 
         if pipeline_version in ("v1", "v2"):
@@ -340,6 +398,29 @@ class RagasPipelineEvaluator:
                 top_k=top_k,
                 top_n=top_n,
             )
+            if active_vertex is not None:
+                try:
+                    lang = detect_query_language(sample.question)
+                    answer = await active_vertex.generate_response(
+                        sample.question,
+                        _format_context_entries(docs),
+                        lang,
+                    )
+                    elapsed_ms = round((time.perf_counter() - start) * 1000.0, 2)
+                    return {
+                        "answer": answer,
+                        "retrieved_contexts": [d.text for d in docs],
+                        "latency_ms": elapsed_ms,
+                        "ttft_ms": elapsed_ms,
+                        "rewrite_count": 0,
+                        "cache_hit": False,
+                    }
+                except VertexAIRouterError as exc:
+                    logger.warning(
+                        "VertexAIRouter failed in eval pipeline; falling back to standard router",
+                        pipeline_version=pipeline_version,
+                        error=str(exc),
+                    )
             context_block = _format_context_block(docs)
             messages = [
                 (
@@ -368,13 +449,15 @@ class RagasPipelineEvaluator:
             retriever=self._retriever,
             router=self._router,
             cache=self._cache,
+            settings=self._settings,
+            vertex_router=active_vertex,
             top_k=top_k,
             top_n=top_n,
             max_retries=max_retries,
         )
         workflow = AgenticRAGWorkflow(
             graph_deps,
-            db_path=self._checkpoint_db,
+            db_path=self._checkpoint_db or ":memory:",
             max_retries=max_retries,
         )
         state = await workflow.ainvoke(
@@ -609,16 +692,88 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_default_eval_samples() -> list[EvalSample]:
+    """Build deterministic 6-sample single-hop/multi-hop benchmark dataset from ``BENCHMARK_CORPUS``."""
+    chunker = make_chunker("v3")
+    chunks = []
+    for doc_id, source, text in BENCHMARK_CORPUS:
+        chunks.extend(chunker.chunk(text=text, source=source, doc_id=doc_id))
+    return build_offline_dataset(chunks, single_hop_count=3, multi_hop_count=3, seed=42)
+
+
+async def build_live_eval_dependencies(
+    settings: Settings,
+) -> tuple[InMemoryHybridRetriever, Any, VertexAIRouter | None]:
+    """Wire retriever, router, and optional ``VertexAIRouter`` for non-offline Ragas runs."""
+    corpus_paths = [p for p in settings.demo_corpus_paths if Path(p).name != "benchmark_report.md"]
+    retriever = await InMemoryHybridRetriever.from_corpus_paths(corpus_paths)
+    chunker = make_chunker("v3")
+    benchmark_chunks: list[RetrievedChunk] = []
+    for doc_id, source, text in BENCHMARK_CORPUS:
+        for c in chunker.chunk(text=text, source=source, doc_id=doc_id):
+            benchmark_chunks.append(
+                RetrievedChunk(
+                    text=c.text,
+                    metadata=c.metadata,
+                    score=0.5,
+                    rank=len(benchmark_chunks),
+                )
+            )
+    await retriever.add_chunks(benchmark_chunks)
+
+    active_vertex: VertexAIRouter | None = None
+    if settings.use_vertex_ai and has_valid_vertex_credentials(settings):
+        active_vertex = VertexAIRouter(settings=settings)
+
+    if active_vertex is not None and not has_valid_cloud_api_keys(settings):
+        vertex_chat = active_vertex.get_chat_model(temperature=0.0)
+        router: Any = LLMRouter(
+            settings=settings,
+            fast_model=vertex_chat,
+            fallback_model=vertex_chat,
+            strong_model=vertex_chat,
+        )
+    elif has_valid_cloud_api_keys(settings):
+        router = LLMRouter(settings=settings)
+    else:
+        router = DemoLLMRouter(settings)
+
+    return retriever, router, active_vertex
+
+
 async def _async_cli(args: argparse.Namespace) -> int:
-    samples = await asyncio.to_thread(load_dataset_jsonl, args.dataset)
+    if args.dataset.exists():
+        samples = await asyncio.to_thread(load_dataset_jsonl, args.dataset)
+    elif args.dataset == DEFAULT_DATASET_PATH:
+        logger.info(
+            "Default dataset file missing; using deterministic BENCHMARK_CORPUS samples",
+            dataset=str(args.dataset),
+        )
+        samples = build_default_eval_samples()
+    else:
+        samples = await asyncio.to_thread(load_dataset_jsonl, args.dataset)
+
     if not samples:
         logger.warning("Evaluation dataset is empty", dataset=str(args.dataset))
         return 1
 
-    evaluator = RagasPipelineEvaluator(
-        max_concurrency=args.concurrency,
-        offline_mode=bool(args.offline),
-    )
+    if args.offline:
+        evaluator = RagasPipelineEvaluator(
+            max_concurrency=args.concurrency,
+            offline_mode=True,
+        )
+    else:
+        settings = get_settings()
+        retriever, router, active_vertex = await build_live_eval_dependencies(settings)
+        evaluator = RagasPipelineEvaluator(
+            retriever=retriever,
+            router=router,
+            vertex_router=active_vertex,
+            settings=settings,
+            max_concurrency=args.concurrency,
+            offline_mode=False,
+        )
+
     report = await evaluator.compare_pipelines(samples, versions=tuple(args.versions))
     await asyncio.to_thread(save_comparison_report, report, args.output)
     print(report.to_markdown_table())
@@ -643,8 +798,10 @@ __all__: Sequence[str] = [
     "RagasPipelineEvaluator",
     "SampleEvalRecord",
     "SampleScorer",
+    "build_default_eval_samples",
     "build_evaluation_dataset",
     "build_judge_llm",
+    "build_live_eval_dependencies",
     "build_ragas_metrics",
     "build_ragas_run_config",
     "heuristic_ragas_scorer",

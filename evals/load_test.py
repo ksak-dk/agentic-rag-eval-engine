@@ -31,7 +31,7 @@ from pathlib import Path
 import httpx
 import structlog
 from fastapi import FastAPI
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.adapters.mock.eval_heuristics import (
     BENCHMARK_CORPUS,
@@ -42,6 +42,8 @@ from app.adapters.mock.eval_heuristics import (
     build_mock_load_test_app,
     compute_percentile,
 )
+from app.adapters.vertex.router import has_valid_vertex_credentials
+from app.core.config import Settings, get_settings
 from app.graph.workflow import open_async_sqlite_saver
 from app.retrieval.chunker import make_chunker
 from evals.dataset_gen import EvalSample, build_offline_dataset, load_dataset_jsonl
@@ -51,6 +53,8 @@ from evals.run_ragas import (
     PipelineVersion,
     RagasComparisonReport,
     RagasPipelineEvaluator,
+    build_live_eval_dependencies,
+    save_comparison_report,
 )
 
 logger = structlog.get_logger(__name__)
@@ -763,8 +767,30 @@ async def _async_cli(args: argparse.Namespace) -> int:
         else:
             samples = _build_default_eval_samples()
 
-        evaluator = RagasPipelineEvaluator(offline_mode=True)
+        settings: Settings | None = None
+        try:
+            settings = get_settings()
+        except ValidationError:
+            settings = None
+
+        if (
+            settings is not None
+            and settings.use_vertex_ai
+            and has_valid_vertex_credentials(settings)
+        ):
+            retriever, router, active_vertex = await build_live_eval_dependencies(settings)
+            evaluator = RagasPipelineEvaluator(
+                retriever=retriever,
+                router=router,
+                vertex_router=active_vertex,
+                settings=settings,
+                offline_mode=False,
+            )
+        else:
+            evaluator = RagasPipelineEvaluator(offline_mode=True)
+
         ragas_report = await evaluator.compare_pipelines(samples, versions=tuple(args.versions))
+        await asyncio.to_thread(save_comparison_report, ragas_report)
         markdown = generate_benchmark_report_markdown(ragas_report, load_summaries)
         await asyncio.to_thread(save_benchmark_report, markdown, args.output_report)
         print(markdown)
