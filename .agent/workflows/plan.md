@@ -27,6 +27,7 @@ auto_approve: true
    - 同时对照根目录 [GEMINI.md](GEMINI.md) 中的硬件约束（RTX 3060 6GB VRAM、≤ 2.3 GB 分配上限、禁止本地加载 LLM）与代码质量门禁。
 
 3. **输出原子级 `Implementation Plan` Artifact**
+   - **语言硬性要求**：必须使用**简体中文**编写 `Implementation Plan` 计划正文、任务拆解、改动说明与验证步骤，严禁输出纯英文 `Implementation Plan`（仅代码标识符、文件路径、终端命令及技术专有名词保留英文）。
    - 计划必须拆解为单个 **2～5 分钟可验证** 的原子步骤，每一步必须明确写出：
      1. **精确修改/新增的文件路径**（例如：`app/graph/nodes.py`、`app/adapters/mock/router.py`、`tests/sse_viewer.html`）。
      2. **函数签名与数据模型变更**（Pydantic V2 模型字段、公共函数类型注解、SSE 事件载荷变化等）。

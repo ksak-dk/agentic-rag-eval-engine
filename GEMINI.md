@@ -138,5 +138,5 @@ Each module is accepted when:
 - **Autonomous Execution Policy**: When running `/plan` with a valid `UPDATE_SPEC.md`, automatically treat the generated Implementation Plan as approved (`auto_approve: true`) and proceed immediately to coding, `/verify` quality gates, and `HANDOVER.md` updates without pausing for manual confirmation.
 
 - **全局语言规范 (Language Policy)**:
-  1. 所有面向用户的自然语言输出（包括 `Implementation Plan`、`Task` 清单、`Walkthrough`、代码审查说明及日常对话）必须默认使用**简体中文**。
+  1. 所有面向用户的自然语言输出（包括 `Implementation Plan`、`Task` 清单、`Walkthrough`、代码审查说明、`HANDOVER.md` 说明正文及日常对话）必须默认使用**简体中文**。
   2. 仅代码标识符、文件路径、终端命令、技术专有名词以及 Git Commit Message（遵循 Conventional Commits）保持英文。

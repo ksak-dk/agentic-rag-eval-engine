@@ -11,7 +11,7 @@ description: 完成前强制证据门禁与交接工作流（/verify）：依次
 ## 强制执行流程
 
 ### 1. 终端质量门禁（严禁跳步或口头声称已通过）
-必须在终端真实依次执行以下 3 条命令，并在最终回复中附上**真实执行摘要与退出码（exit code）**：
+必须在终端真实依次执行以下 3 条命令，并在最终回复中以**简体中文**附上**真实执行摘要与退出码（exit code）**（命令与日志原文保留英文）：
 
 1. **Lint 检查**：
    ```powershell
@@ -44,7 +44,7 @@ description: 完成前强制证据门禁与交接工作流（/verify）：依次
 ### 3. 自动化交接更新（遵循 `GEMINI.md` Section 8）
 - 仅在全部质量门禁通过且确认准备/完成 `git commit` 后执行：
   - **严禁**在本地手动创建任何 Git Tag（版本 Tag 与 GitHub Release 由 `.github/workflows/ci.yml` 在 `push origin main` 后全自动生成）。
-  - 覆盖更新根目录的 `HANDOVER.md`（已被 `.gitignore` 忽略，严禁提交到 Git），确保完整包含以下 4 项交接要素：
+  - 使用**简体中文**覆盖更新根目录的 `HANDOVER.md`（已被 `.gitignore` 忽略，严禁提交到 Git；仅代码标识符、文件路径、命令与日志原文保留英文），确保完整包含以下 4 项交接要素：
     1. **最新 Git 状态**：`git log -n 3 --oneline` 与 `git status` 的实际输出。
     2. **质量门禁结果**：`uv run ruff check .`、`uv run ruff format --check .` 与 `uv run pytest -v` 的真实执行结果与通过统计。
     3. **新增/修改模块接口摘要**：关键 Class 与公开函数签名变化。
