@@ -25,9 +25,11 @@ from dataclasses import dataclass
 from typing import Any
 
 import structlog
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from app.adapters.vertex.router import VertexAIRouter, VertexAIRouterError
 from app.cache.semantic_cache import is_cacheable_response
+from app.core.config import Settings, get_settings
 from app.core.logging import log_stage_latency, update_request_metrics
 from app.core.router import RouteTier, TaskType
 from app.graph.state import (
@@ -130,6 +132,8 @@ class GraphDependencies:
     retriever: Any
     router: Any
     cache: Any | None = None
+    settings: Settings | None = None
+    vertex_router: Any | None = None
     document_grader: Callable[[str, RetrievedChunk], Awaitable[bool]] | None = None
     query_rewriter: Callable[[str, int], Awaitable[str]] | None = None
     hallucination_checker: Callable[[str, list[RetrievedChunk]], Awaitable[bool]] | None = None
@@ -152,16 +156,53 @@ def _lexical_relevance_fallback(query: str, text: str) -> bool:
     return bool(query_terms & text_terms)
 
 
-def _format_context_block(chunks: list[RetrievedChunk]) -> str:
-    blocks: list[str] = []
+def _format_context_entries(chunks: list[RetrievedChunk]) -> list[str]:
+    entries: list[str] = []
     for chunk in chunks:
         header_trail = " > ".join(chunk.metadata.section_path) or "root"
-        blocks.append(
+        entries.append(
             f"[{chunk.metadata.doc_id}] "
             f"(source: {chunk.metadata.source}, section: {header_trail})\n"
             f"{chunk.text}"
         )
-    return "\n\n---\n\n".join(blocks)
+    return entries
+
+
+def _format_context_block(chunks: list[RetrievedChunk]) -> str:
+    return "\n\n---\n\n".join(_format_context_entries(chunks))
+
+
+def _build_rag_messages(query: str, docs: list[RetrievedChunk]) -> list[tuple[str, str]]:
+    """Build trilingual-aligned system and user messages for RAG synthesis."""
+    context_block = _format_context_block(docs)
+    if context_block:
+        return [
+            (
+                "system",
+                build_multilingual_system_prompt(query),
+            ),
+            ("user", f"Question: {query}\n\nContext:\n{context_block}"),
+        ]
+    return [
+        (
+            "system",
+            "Answer the user question concisely in the exact same language as the user question. "
+            "If insufficient context is available, state that clearly.",
+        ),
+        ("user", f"Question: {query}"),
+    ]
+
+
+def _resolve_node_settings(deps: GraphDependencies) -> Settings | None:
+    if deps.settings is not None:
+        return deps.settings
+    router_settings = getattr(deps.router, "settings", None)
+    if isinstance(router_settings, Settings):
+        return router_settings
+    try:
+        return get_settings()
+    except ValidationError:
+        return None
 
 
 def _chunk_to_citation(chunk: RetrievedChunk, *, lang: str = "en") -> Citation:
@@ -416,6 +457,48 @@ async def rewrite_query_node(state: RAGGraphState, deps: GraphDependencies) -> d
     }
 
 
+async def _try_vertex_generation(
+    query: str,
+    docs: list[RetrievedChunk],
+    deps: GraphDependencies,
+    settings: Settings | None,
+) -> tuple[str, str] | None:
+    """Route generation to VertexAIRouter only when explicitly enabled with valid credentials."""
+    if settings is None or not settings.use_vertex_ai:
+        return None
+
+    vertex_router = deps.vertex_router or VertexAIRouter(settings=settings)
+    if not vertex_router.has_valid_credentials():
+        logger.warning(
+            "USE_VERTEX_AI is enabled but Vertex AI credentials or project ID are unavailable; "
+            "falling back to standard router",
+            project_id=settings.vertex_project_id,
+        )
+        return None
+
+    lang = detect_query_language(query)
+    context_entries = _format_context_entries(docs)
+    try:
+        answer = await vertex_router.generate_response(query, context_entries, lang)
+    except VertexAIRouterError as exc:
+        logger.warning(
+            "VertexAIRouter failed; falling back to standard router",
+            error_type=type(exc).__name__,
+            error=str(exc),
+        )
+        return None
+    except Exception as exc:
+        logger.warning(
+            "Unexpected VertexAIRouter error; falling back to standard router",
+            error_type=type(exc).__name__,
+            error=str(exc),
+        )
+        return None
+
+    model_name = str(getattr(vertex_router, "model_name", "") or settings.strong_llm_model)
+    return answer, model_name
+
+
 async def generate_node(state: RAGGraphState, deps: GraphDependencies) -> dict[str, Any]:
     """Generate a grounded answer citing source ``[doc_id]`` identifiers."""
     query = (state.get("query") or state.get("rewritten_query") or "").strip()
@@ -429,19 +512,29 @@ async def generate_node(state: RAGGraphState, deps: GraphDependencies) -> dict[s
             "error": "No graded documents available for generation.",
         }
 
-    context_block = _format_context_block(docs)
-    messages = [
-        (
-            "system",
-            build_multilingual_system_prompt(query),
-        ),
-        (
-            "user",
-            f"Question: {query}\n\nContext:\n{context_block}",
-        ),
-    ]
+    messages = _build_rag_messages(query, docs)
+    node_settings = _resolve_node_settings(deps)
 
     async with log_stage_latency("generate", context_chunks=len(docs)):
+        vertex_result = await _try_vertex_generation(query, docs, deps, node_settings)
+        if vertex_result is not None:
+            raw_answer, vertex_model = vertex_result
+            annotated_answer, citations = _extract_citations(raw_answer, docs)
+            update_request_metrics(
+                route_tier=RouteTier.STRONG.value,
+                model_name=vertex_model,
+                generation_mode="vertex_ai",
+            )
+            return {
+                "answer": annotated_answer,
+                "citations": citations,
+                "route_tier": RouteTier.STRONG.value,
+                "fallback_triggered": False,
+                "is_fallback": False,
+                "generation_mode": "vertex_ai",
+                "error": None,
+            }
+
         try:
             gen_result = await deps.router.ainvoke(
                 messages,
@@ -671,6 +764,7 @@ __all__: Sequence[str] = [
     "GraphDependencies",
     "HallucinationGradeOutput",
     "QueryRewriteOutput",
+    "_build_rag_messages",
     "bind_nodes",
     "build_multilingual_system_prompt",
     "cache_lookup_node",

@@ -41,9 +41,8 @@ from app.core.router import LLMRouterError, RouteTier, TaskType
 from app.graph.nodes import (
     FALLBACK_ANSWER,
     GraphDependencies,
+    _build_rag_messages,
     _extract_citations,
-    _format_context_block,
-    build_multilingual_system_prompt,
     detect_query_language,
 )
 from app.graph.state import (
@@ -305,26 +304,6 @@ def _resolve_model_name_for_tier(route_tier: str, deps: ChatServiceDependencies)
     if route_tier == RouteTier.STRONG.value:
         return settings.strong_llm_model if settings is not None else "gemini-2.5-flash"
     return settings.fast_llm_model if settings is not None else "llama-3.1-8b-instant"
-
-
-def _build_rag_messages(query: str, docs: list[RetrievedChunk]) -> list[tuple[str, str]]:
-    context_block = _format_context_block(docs)
-    if context_block:
-        return [
-            (
-                "system",
-                build_multilingual_system_prompt(query),
-            ),
-            ("user", f"Question: {query}\n\nContext:\n{context_block}"),
-        ]
-    return [
-        (
-            "system",
-            "Answer the user question concisely in the exact same language as the user question. "
-            "If insufficient context is available, state that clearly.",
-        ),
-        ("user", f"Question: {query}"),
-    ]
 
 
 def _sync_metrics_from_generation(gen_result: Any) -> None:

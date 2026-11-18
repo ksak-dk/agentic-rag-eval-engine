@@ -225,6 +225,7 @@ class ServiceContainer:
             retriever=self.retriever,
             router=self.router,
             cache=self.semantic_cache,
+            settings=self.settings,
             top_k=self.settings.retrieval_top_k,
             top_n=self.settings.retrieval_top_n,
             max_retries=self.settings.max_retries,

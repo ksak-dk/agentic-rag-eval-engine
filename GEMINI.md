@@ -116,3 +116,27 @@ Each module is accepted when:
 2. **质量门禁结果**：`uv run ruff check .` 与 `uv run pytest` 的实际执行汇总与通过状态。
 3. **新增/修改模块接口摘要**：本次及近期新增模块的关键类（Class）与公开函数签名（Function Signatures）。
 4. **下一阶段衔接点**：明确下一步待开发模块、依赖契约与注意事项。
+
+---
+
+## Agentic Workflow & Blast-Radius Gates
+
+本仓库在 `.agent/workflows/` 下接入标准化斜杠工作流，所有代理协作必须遵守以下工作流与安全门禁：
+
+- **标准化工作流声明（`.agent/workflows/`）**：
+  - `/plan`（`.agent/workflows/plan.md`）：规约驱动计划工作流。开发新特性或修改超过 2 个文件前必须触发；支持直接接收内联 `--- SPEC START ---` 规约块并自动提取覆写根目录 `UPDATE_SPEC.md`（已由 `.gitignore` 忽略，用完后**严禁提交到 Git**），若未提供内联分隔符则优先读取根目录已有 `UPDATE_SPEC.md`，随后输出拆解为 2～5 分钟可验证原子步骤的 `Implementation Plan` Artifact；当存在有效 `UPDATE_SPEC.md` 时自动放行执行（`auto_approve: true`），无需暂停等待人工确认。
+  - `/debug`（`.agent/workflows/debug.md`）：系统化根因排查工作流。严格执行 `Reproduce -> Isolate -> Fix -> Verify` 四步法，严禁未复现前盲目试错打补丁。
+  - `/verify`（`.agent/workflows/verify.md`）：完成前强制证据门禁与交接工作流。收尾前必须实跑 `uv run ruff check .`、`uv run ruff format --check .`、`uv run pytest -v` 并附上真实退出码与摘要（涉及 `tests/sse_viewer.html` 时按需做浏览器巡检），通过后按 Section 8 自动更新 `HANDOVER.md`。执行 `pytest` 时必须申请前台非沙箱权限（允许 `127.0.0.1` 回环通信），严禁丢入沙箱后台任务运行。
+
+- **爆炸半径拦截门禁（Blast-Radius Gates）**：
+  遇到以下高影响变更时，代理**必须立即暂停并请求人工确认**，严禁擅自修改或提交：
+  1. 修改 `pyproject.toml` 新增、升级或移除第三方依赖；
+  2. 更改 `/api/v1/` 公共接口签名、端点路径或请求/响应 Pydantic 契约；
+  3. 破坏或改写原有 56 项 `pytest` 单测基线断言；
+  4. 修改 GitHub Actions CI/CD 配置文件（`.github/workflows/`）。
+
+- **Autonomous Execution Policy**: When running `/plan` with a valid `UPDATE_SPEC.md`, automatically treat the generated Implementation Plan as approved (`auto_approve: true`) and proceed immediately to coding, `/verify` quality gates, and `HANDOVER.md` updates without pausing for manual confirmation.
+
+- **全局语言规范 (Language Policy)**:
+  1. 所有面向用户的自然语言输出（包括 `Implementation Plan`、`Task` 清单、`Walkthrough`、代码审查说明及日常对话）必须默认使用**简体中文**。
+  2. 仅代码标识符、文件路径、终端命令、技术专有名词以及 Git Commit Message（遵循 Conventional Commits）保持英文。

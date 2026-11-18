@@ -70,6 +70,18 @@ class Settings(BaseSettings):
         default="",
         description="Optional alias for Google AI Studio key (GEMINI_API_KEY).",
     )
+    use_vertex_ai: bool = Field(
+        default=False,
+        description="Whether to route requests through Vertex AI (requires GCP credentials and consumes budget)",
+    )
+    vertex_project_id: str | None = Field(
+        default=None,
+        description="Optional GCP project ID for Vertex AI routing.",
+    )
+    vertex_location: str = Field(
+        default="us-central1",
+        description="GCP region for Vertex AI Gemini endpoint.",
+    )
 
     # -------------------------------------------------------------------------
     # Langfuse (optional observability — requires profile: observability)
