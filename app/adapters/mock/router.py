@@ -287,7 +287,7 @@ class DemoLLMRouter:
             or "flowchart" in snip_lower
         ):
             return (
-                "시스템 아키텍처 토폴로지 (System Architecture)",
+                "시스템 아키텍처 토폴로지",
                 (
                     "FastAPI 듀얼 채널 SSE 엔드포인트(/api/v1/chat)가 Redis 8 벡터 시맨틱 캐시(RediSearch HNSW, "
                     "Cosine ≥ 0.92), Qdrant 하이브리드 벡터 저장소(int8 Dense + BM25 Sparse + 서버 사이드 Fusion.RRF), "
@@ -339,7 +339,7 @@ class DemoLLMRouter:
 
         if "3.1" in section or "检索与生成质量对比" in section or "0.6759" in snip_lower:
             return (
-                "Ragas v0.2+ 정량 평가 벤치마크 (v1 vs v2 vs v3)",
+                "Ragas v0.2+ 정량 평가 벤치마크",
                 (
                     "Ragas v0.2+ 종합 점수(Overall Score)는 v1 0.6759(Context Recall 0.3884, Faithfulness 0.6392)에서 "
                     "v2 0.8554(Context Recall 0.7679, Faithfulness 0.7984), v3 0.9950(Context Recall 1.0000, "
@@ -365,7 +365,7 @@ class DemoLLMRouter:
             or _ASCII_TREE_RE.search(raw_snippet)
         ):
             return (
-                "서비스 토폴로지 및 아키텍처 구성 (Service Topology)",
+                "서비스 토폴로지 및 아키텍처 구성",
                 (
                     "Windows 호스트(uv .venv) 기반 FastAPI + Uvicorn(:8000), PyTorch CUDA FP16(RTX 3060 직접 가속), "
                     "LangGraph StateGraph(AsyncSqliteSaver 체크포인트) 및 Docker 기반 Qdrant(:6333, int8 스칼라 양자화, "
@@ -389,7 +389,7 @@ class DemoLLMRouter:
 
         if "technology stack" in sec_lower or doc_lower == "doc-gemini-4":
             return (
-                "핵심 기술 스택 (Technology Stack)",
+                "핵심 기술 스택",
                 (
                     "Python 3.11+ & uv, FastAPI + sse-starlette, Pydantic V2(Strict Mode), LangGraph(StateGraph + "
                     "AsyncSqliteSaver), sentence-transformers(CUDA FP16), Qdrant(int8 Dense + BM25 Sparse + 서버 사이드 RRF), "
@@ -601,13 +601,13 @@ class DemoLLMRouter:
         bullets_md = "\n".join(bullet_lines)
 
         if version == "v2":
-            return f"**하이브리드 검색 요약 (Hybrid Retrieval Summary):** {v2_lead} [{primary_id}]\n\n{bullets_md}"
+            return f"**하이브리드 검색 요약:** {v2_lead} [{primary_id}]\n\n{bullets_md}"
 
         return (
-            f"**에이전틱 종합 분석 (Agentic Synthesis):** {v3_lead} [{primary_id}]\n\n"
-            f"**검증된 근거 및 컨텍스트 (Verified Evidence & Context):**\n"
+            f"**에이전틱 종합 분석:** {v3_lead} [{primary_id}]\n\n"
+            f"**검증된 근거 및 컨텍스트:**\n"
             f"{bullets_md}\n\n"
-            f"**그라운딩 검증 (Grounding Check):** 검색된 `{len(selected)}`개의 컨텍스트 세그먼트에 대해 "
+            f"**그라운딩 검증:** 검색된 `{len(selected)}`개의 컨텍스트 세그먼트에 대해 "
             f"`[doc_id]` 인용 추적 및 환각 방지 검증을 완료했습니다 (`v3` 자기 수정 파이프라인)."
         )
 
@@ -669,13 +669,13 @@ class DemoLLMRouter:
         bullets_md = "\n".join(bullet_lines)
 
         if version == "v2":
-            return f"**混合检索摘要:** {v2_lead} [{primary_id}]\n\n{bullets_md}"
+            return f"**混合检索摘要：** {v2_lead} [{primary_id}]\n\n{bullets_md}"  # noqa: RUF001
 
         return (
-            f"**智能体综合分析:** {v3_lead} [{primary_id}]\n\n"
-            f"**已验证证据与上下文:**\n"
+            f"**智能体综合分析：** {v3_lead} [{primary_id}]\n\n"  # noqa: RUF001
+            f"**已验证证据与上下文：**\n"  # noqa: RUF001
             f"{bullets_md}\n\n"
-            f"**事实锚定校验:** 已在 `{len(selected)}` 个检索上下文切片上完成 `[doc_id]` 引用溯源与防幻觉核验 (`v3` 自纠错流水线)。"
+            f"**事实锚定校验：** 已在 `{len(selected)}` 个检索上下文切片上完成 `[doc_id]` 引用溯源与防幻觉核验 (`v3` 自纠错流水线)。"  # noqa: RUF001
         )
 
     @classmethod

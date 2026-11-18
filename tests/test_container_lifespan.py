@@ -408,14 +408,29 @@ async def test_korean_and_chinese_adaptive_synthesis_and_citations(
 
                     if version == "v1":
                         assert "v1 베이스라인은 고정 길이 청킹" in answer
+                        assert "The `v1` baseline" not in answer
                     elif version == "v2":
-                        assert "**하이브리드 검색 요약 (Hybrid Retrieval Summary):**" in answer
+                        assert "**하이브리드 검색 요약:**" in answer
+                        assert "Hybrid Retrieval Summary" not in answer
                     else:
-                        assert "**에이전틱 종합 분석 (Agentic Synthesis):**" in answer
-                        assert (
-                            "**검증된 근거 및 컨텍스트 (Verified Evidence & Context):**" in answer
-                        )
-                        assert "**그라운딩 검증 (Grounding Check):**" in answer
+                        assert "**에이전틱 종합 분석:**" in answer
+                        assert "**검증된 근거 및 컨텍스트:**" in answer
+                        assert "**그라운딩 검증:**" in answer
+                        assert "Agentic Synthesis" not in answer
+                        assert "Verified Evidence & Context" not in answer
+                        assert "Grounding Check" not in answer
+
+            zh_v2_resp = await client.post(
+                "/api/v1/chat",
+                json={
+                    "query": "本项目如何在 RTX 3060 6GB 显存限制下实现高精度混合检索?",
+                    "session_id": "zh-v2-test",
+                    "pipeline_version": "v2",
+                    "stream": False,
+                },
+            )
+            assert zh_v2_resp.status_code == 200
+            assert "**混合检索摘要：**" in zh_v2_resp.json()["answer"]  # noqa: RUF001
 
             zh_resp = await client.post(
                 "/api/v1/chat",
@@ -428,7 +443,7 @@ async def test_korean_and_chinese_adaptive_synthesis_and_citations(
             )
             assert zh_resp.status_code == 200
             zh_answer = zh_resp.json()["answer"]
-            assert "**智能体综合分析:**" in zh_answer
-            assert "**已验证证据与上下文:**" in zh_answer
-            assert "**事实锚定校验:**" in zh_answer
+            assert "**智能体综合分析：**" in zh_answer  # noqa: RUF001
+            assert "**已验证证据与上下文：**" in zh_answer  # noqa: RUF001
+            assert "**事实锚定校验：**" in zh_answer  # noqa: RUF001
             assert "[doc-" in zh_answer
