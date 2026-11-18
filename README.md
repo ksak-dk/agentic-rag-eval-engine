@@ -7,6 +7,7 @@
 </div>
 
 [![CI](https://github.com/ksak-dk/agentic-rag-eval-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/ksak-dk/agentic-rag-eval-engine/actions/workflows/ci.yml)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Render%20Portfolio-46E3B7?logo=render&logoColor=white)](https://agentic-rag-eval-engine.onrender.com)
 ![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-Dual--Channel%20SSE-009688?logo=fastapi&logoColor=white)
 ![LangGraph](https://img.shields.io/badge/LangGraph-StateGraph%20%2B%20AsyncSqliteSaver-1C3C3C)
@@ -195,6 +196,8 @@ uv run python scripts/demo_e2e.py --mode live --url http://127.0.0.1:8000
 ### 4.3 云端公网部署 — Cloud Deployment (Render / Docker / Cloudflare Tunnel)
 
 - **方案 A：Render / Docker 一键上线公网作品集看板（512MB 免费层友好）**
+  - **在线作品集体验地址**：[https://agentic-rag-eval-engine.onrender.com](https://agentic-rag-eval-engine.onrender.com)（`/api/v1/health` 健康检查：`https://agentic-rag-eval-engine.onrender.com/api/v1/health`）
+  - > **提示**：Render 免费实例闲置 15 分钟后会自动休眠，首次打开请等待约 **30~50 秒**冷启动唤醒。
   仓库根目录提供多阶段轻量级 [Dockerfile](Dockerfile) 与 Render Blueprint [render.yaml](render.yaml)。云端构建仅安装轻量推理/编排依赖（自动跳过 CUDA `torch`、`sentence-transformers` 等重型包），默认以 `RUNTIME_MODE=demo` 监听 `0.0.0.0:$PORT` 并配置 `/api/v1/health` 健康检查：
   ```bash
   # 本地构建并验证云端轻量容器镜像

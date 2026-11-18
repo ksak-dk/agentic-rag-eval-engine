@@ -7,6 +7,7 @@
 </div>
 
 [![CI](https://github.com/ksak-dk/agentic-rag-eval-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/ksak-dk/agentic-rag-eval-engine/actions/workflows/ci.yml)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Render%20Portfolio-46E3B7?logo=render&logoColor=white)](https://agentic-rag-eval-engine.onrender.com)
 ![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-Dual--Channel%20SSE-009688?logo=fastapi&logoColor=white)
 ![LangGraph](https://img.shields.io/badge/LangGraph-StateGraph%20%2B%20AsyncSqliteSaver-1C3C3C)
@@ -195,6 +196,8 @@ Then open [tests/sse_viewer.html](tests/sse_viewer.html) in your browser to swit
 ### 4.3 Cloud Deployment (Render / Docker / Cloudflare Tunnel)
 
 - **Option A: One-Click Portfolio Dashboard on Render / Docker (512MB Free-Tier Ready)**
+  - **Live Portfolio Demo**: [https://agentic-rag-eval-engine.onrender.com](https://agentic-rag-eval-engine.onrender.com) (Health check: `https://agentic-rag-eval-engine.onrender.com/api/v1/health`)
+  - > **Note**: Render free-tier instances spin down after 15 minutes of inactivity; please allow **~30–50 seconds** for cold-start wake-up on the first visit.
   The repository includes a multi-stage lightweight [Dockerfile](Dockerfile) and Render Blueprint [render.yaml](render.yaml). Cloud builds install only lightweight runtime dependencies (omitting heavy CUDA `torch`, `sentence-transformers`, `fastembed`, and `ragas` packages), default to `RUNTIME_MODE=demo` listening on `0.0.0.0:$PORT`, and wire `/api/v1/health` as the health check:
   ```bash
   # Build and verify the lightweight cloud container locally

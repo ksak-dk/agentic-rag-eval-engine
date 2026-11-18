@@ -7,6 +7,7 @@
 </div>
 
 [![CI](https://github.com/ksak-dk/agentic-rag-eval-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/ksak-dk/agentic-rag-eval-engine/actions/workflows/ci.yml)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Render%20Portfolio-46E3B7?logo=render&logoColor=white)](https://agentic-rag-eval-engine.onrender.com)
 ![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-Dual--Channel%20SSE-009688?logo=fastapi&logoColor=white)
 ![LangGraph](https://img.shields.io/badge/LangGraph-StateGraph%20%2B%20AsyncSqliteSaver-1C3C3C)
@@ -195,6 +196,8 @@ uv run python scripts/demo_e2e.py --mode live --url http://127.0.0.1:8000
 ### 4.3 클라우드 배포 — Cloud Deployment (Render / Docker / Cloudflare Tunnel)
 
 - **옵션 A: Render / Docker 기반 원클릭 포트폴리오 대시보드 배포 (512MB 무료 티어 최적화)**
+  - **라이브 포트폴리오 데모**: [https://agentic-rag-eval-engine.onrender.com](https://agentic-rag-eval-engine.onrender.com) (헬스 체크: `https://agentic-rag-eval-engine.onrender.com/api/v1/health`)
+  - > **참고**: Render 무료 인스턴스는 15분간 유휴 상태일 때 자동 절전 모드로 전환되므로, 첫 접속 시 콜드 스타트 기동에 약 **30~50초** 정도 소요될 수 있습니다.
   저장소 루트의 경량 멀티스테이지 [Dockerfile](Dockerfile)과 Render Blueprint [render.yaml](render.yaml)을 통해 별도 GPU 없이도 즉시 배포할 수 있습니다. 클라우드 빌드에서는 무거운 CUDA `torch`·`sentence-transformers`·`fastembed`·`ragas` 패키지를 제외하고 경량 런타임 의존성만 설치하며, 기본 `RUNTIME_MODE=demo`로 `0.0.0.0:$PORT`에 바인딩하고 `/api/v1/health` 헬스 체크를 사용합니다:
   ```bash
   # 로컬에서 경량 클라우드 컨테이너 이미지 빌드 및 검증
