@@ -7,7 +7,15 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
 VIEWER_PATH = Path(__file__).resolve().parent / "sse_viewer.html"
+README_PATHS = (
+    REPO_ROOT / "README.md",
+    REPO_ROOT / "README.en.md",
+    REPO_ROOT / "README.ko.md",
+)
+BENCHMARK_REPORT_PATH = REPO_ROOT / "evals" / "benchmark_report.md"
+README_ASSET_RE = re.compile(r"!\[[^\]]*\]\((docs/assets/[^)\s]+)\)")
 CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 VOID_ELEMENTS = frozenset(
     {
@@ -313,3 +321,65 @@ def test_i18n_trilingual_dictionary_key_parity_and_zero_cjk_leakage() -> None:
             assert placeholder_key in zh_keys, (
                 f"Unknown data-i18n-placeholder key in HTML: {placeholder_key}"
             )
+
+
+def test_export_controls_and_blob_download_logic() -> None:
+    dom = _parse_dom(_load_viewer_html())
+    script_body = _extract_script_body(dom)
+
+    md_btn = dom.find_by_id("exportMdBtn")
+    json_btn = dom.find_by_id("exportJsonBtn")
+    assert md_btn is not None and md_btn.tag == "button"
+    assert json_btn is not None and json_btn.tag == "button"
+    assert md_btn.attrs.get("data-i18n") == "btn_export_md"
+    assert json_btn.attrs.get("data-i18n") == "btn_export_json"
+
+    for snippet in (
+        "function buildExportReport(",
+        "function downloadBlob(",
+        "URL.createObjectURL(",
+        "URL.revokeObjectURL(",
+        "rag-eval-report-",
+        "toISOString()",
+        "syncExportButtons",
+    ):
+        assert snippet in script_body, f"Missing export logic: {snippet}"
+
+    i18n_dict = _extract_i18n_dict(script_body)
+    for lang in ("zh", "en", "ko"):
+        for key in (
+            "btn_export_md",
+            "btn_export_json",
+            "export_empty_hint",
+            "export_success",
+        ):
+            assert i18n_dict[lang].get(key), f"{lang} missing i18n key {key}"
+
+
+def test_readme_local_images_exist_and_are_consistent() -> None:
+    per_readme_assets: dict[str, list[str]] = {}
+    for readme in README_PATHS:
+        assert readme.is_file(), f"Missing {readme.name}"
+        assets = README_ASSET_RE.findall(readme.read_text(encoding="utf-8"))
+        assert len(set(assets)) >= 2, f"{readme.name} must embed at least 2 docs/assets images"
+        for rel_path in assets:
+            assert (REPO_ROOT / rel_path).is_file(), f"{readme.name} broken image: {rel_path}"
+        per_readme_assets[readme.name] = sorted(set(assets))
+
+    reference = per_readme_assets["README.md"]
+    for name, assets in per_readme_assets.items():
+        assert assets == reference, f"{name} image set differs from README.md"
+
+
+def test_readme_benchmark_source_exists_and_is_cited() -> None:
+    assert BENCHMARK_REPORT_PATH.is_file()
+    report_text = BENCHMARK_REPORT_PATH.read_text(encoding="utf-8")
+    generated_match = re.search(r"\*\*Generated At\*\*: `([^`]+)`", report_text)
+    assert generated_match is not None
+    assert "offline-heuristic" in report_text
+
+    for readme in README_PATHS:
+        text = readme.read_text(encoding="utf-8")
+        assert "evals/benchmark_report.md" in text
+        assert generated_match.group(1) in text, f"{readme.name} does not cite the report timestamp"
+        assert "offline-heuristic" in text
