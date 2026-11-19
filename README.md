@@ -19,6 +19,26 @@
 
 > 面向 **6 GB VRAM 消费级边缘显卡（RTX 3060）** 设计的生产级自纠错 **Agentic RAG** 引擎与量化评测平台：**本地零 LLM 部署（严格 ≤ 2.3 GB FP16 显存预算）**，完整覆盖 `v1 → v2 → v3` 架构演进、双通道 FastAPI SSE 流式输出、Redis 8 原生向量语义缓存与 Ragas v0.2+ / 异步并发 SLA 自动化基线评测。
 
+## 界面预览 (Preview)
+
+![Arena 同屏对比与 Citations 联动视图](docs/assets/arena-citations-preview.png)
+
+*三代架构（v1 / v2 / v3）同屏流式对比，右侧 Inspector 联动展示 LangGraph 链路与 Citations 证据切片。*
+
+![Ragas 量化基线视图](docs/assets/ragas-benchmark-preview.png)
+
+*同一工作台的 Ragas v0.2+ 量化基线视图，工作台操作栏支持一键导出 Markdown / JSON 评测报告。*
+
+### 三代架构演进一览
+
+| 流水线 | 核心组件 | 解决的工程痛点 | Context Recall | Faithfulness | Overall | P95（压测，ms） |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| `v1` Naive Baseline | 固定窗口切分 + Qdrant `int8` Dense 检索 + 单步生成 | 建立可对比的最小基线 | 0.3884 | 0.6392 | 0.6759 | 28.00 |
+| `v2` Hybrid RRF + FP16 Rerank | Markdown 语义切分 + Dense/BM25 + 服务端 RRF + 本地 `bge-reranker-v2-m3` | 稀疏/稠密互补，提升多跳召回与排序精度 | 0.7679 | 0.7984 | 0.8554 | 110.06 |
+| `v3` Agentic LangGraph + Redis Semantic Cache | `v2` + 相关性评分 / 有界重写 / 幻觉校验 + Redis 8 语义缓存 | 抑制幻觉、避免死循环，缓存命中削峰（30.0%） | 1.0000 | 0.9851 | 0.9950 | 680.97 |
+
+> 数据来源：[evals/benchmark_report.md](evals/benchmark_report.md)（`offline-heuristic`，详见第 3 节）。
+
 ---
 
 ## 1. 系统架构全景图 (System Architecture)
@@ -111,11 +131,17 @@ flowchart TD
   - `evals/run_ragas.py`：使用 Ragas v0.2+ OOP 指标（`LLMContextRecall`、`Faithfulness`、`LLMContextPrecisionWithReference`）配合 `RunConfig(max_workers=2, max_retries=5, max_wait=60)` 与 `asyncio.Semaphore(2)` 并发控制完成 `v1 / v2 / v3` 横向对比。
   - `evals/load_test.py`：支持离线 ASGI（`MOCK_LLM_STREAM=true`）与实机 HTTP 双模式高并发压测，自动校验 **P95 < 1800 ms** SLA 红线并生成 `evals/benchmark_report.md`。
 
+### 2.5 端侧 6GB 显存优化、工程亮点与工程规范
+- **6 GB VRAM 预算**：仅本地加载 `bge-m3`（~1.1 GB FP16）与 `bge-reranker-v2-m3`（~1.1 GB FP16），合计 ~2.3 GB，严禁本地 LLM，推理通过 `run_in_executor` 异步卸载。
+- **SHA-256 幂等入库与防缓存污染**：重复文档按内容哈希跳过；入库后自动失效语义缓存；降级回答与含 HTML 污染的回答被 `is_cacheable_response` 拦截，不会写入缓存。
+- **三语 SSE 工作台与一键导出**：`tests/sse_viewer.html` 支持 `ZH / EN / KO` 切换、三代同屏流式对比、可随时中止生成，并可在前端纯本地导出 `rag-eval-report-YYYYMMDD-HHMMSS.md / .json` 评测报告。
+- **工程规范与自动化门禁**：仓库公开 [GEMINI.md](GEMINI.md)（架构红线与零成本离线约束）、`.agents/skills/`（6 阶段 Spec / TDD 工作流技能）与 `.agent/workflows/`（`/plan`、`/debug`、`/verify`）；GitHub Actions CI 执行 `ruff check`、`ruff format --check` 与离线 `pytest`。
+
 ---
 
 ## 3. 量化评测与性能压测基线 (Benchmark Results)
 
-> 以下数据直接引自自动化生成的 [evals/benchmark_report.md](evals/benchmark_report.md)（生成时间：`2026-11-17T18:36:57.049339+00:00`，Judge Mode：`offline-heuristic`，硬件基线：Windows 11 + RTX 3060 6 GB VRAM）。
+> 以下数据直接引自自动化生成的 [evals/benchmark_report.md](evals/benchmark_report.md)（生成时间：`2026-11-19T14:35:30.996430+00:00`，Judge Mode：`offline-heuristic`，硬件基线：Windows 11 + RTX 3060 6 GB VRAM）。**Ragas 部分由确定性离线启发式仿真产生（可复现回归基线，非真实 LLM 裁判得分）；压测延迟与 RPS 为内存级 ASGI 仿真实测，随机器性能浮动。** 复现：`USE_VERTEX_AI=false uv run python -m evals.load_test --generate-report --mock-llm-stream`。
 
 ### 3.1 Ragas v0.2+ 检索与生成质量对比 (`v1` vs `v2` vs `v3`)
 
@@ -132,15 +158,22 @@ flowchart TD
 
 | Pipeline | Requests | Concurrency | Mock Stream | Success Rate | Cache Hit Rate | RPS | P50 (ms) | P95 (ms) | P99 (ms) | Mean TTFT (ms) | SLA (< 1800 ms) |
 | --- | ---: | ---: | :---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: |
-| `v1` | 20 | 10 | `true` | 100.0% | 0.0% | 111.37 | 37.58 | 45.28 | 107.34 | 31.96 | **PASS** |
-| `v2` | 20 | 10 | `true` | 100.0% | 0.0% | 64.90 | 98.91 | 104.94 | 106.25 | 98.82 | **PASS** |
-| `v3` | 20 | 10 | `true` | 100.0% | **30.0%** | 19.66 | 445.69 | **678.77** | 684.31 | 441.48 | **PASS** |
+| `v1` | 20 | 10 | `true` | 100.0% | 0.0% | 144.11 | 17.18 | 28.00 | 83.74 | 21.84 | **PASS** |
+| `v2` | 20 | 10 | `true` | 100.0% | 0.0% | 68.33 | 106.79 | 110.06 | 110.38 | 93.04 | **PASS** |
+| `v3` | 20 | 10 | `true` | 100.0% | **30.0%** | 19.55 | 445.01 | **680.97** | 687.77 | 442.66 | **PASS** |
 
-- 在并发度 `10` 的 SSE 流式压测下，`v3` 依靠 Redis 8 语义缓存（**30.0%** 命中率）将 **P95 延迟控制在 678.77 ms**，远低于 **1800 ms** 生产 SLA 红线。
+- 在并发度 `10` 的 SSE 流式压测下，`v3` 依靠 Redis 8 语义缓存（**30.0%** 命中率）将 **P95 延迟控制在 680.97 ms**，远低于 **1800 ms** 生产 SLA 红线。
 
 ---
 
 ## 4. 快速开始与实机录屏指南 (Quick Start & Live Demo)
+
+**两条命令拉起零成本离线演示**（无需 Docker / GPU / 云端 Key，默认 `USE_VERTEX_AI=false`）：
+
+```bash
+uv sync --all-extras --dev
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8000   # 打开 / open / 접속: http://127.0.0.1:8000/
+```
 
 ### 4.1 极速离线体验与全量质量门禁（无需 Docker / GPU / 云端 Key）
 
@@ -169,8 +202,8 @@ uv run pytest -v
 uv run python scripts/demo_e2e.py --mode asgi
 # 演示实录将自动保存至 ./data/e2e_demo_transcript.md
 
-# 7. (可选) 一键复现全量压测与评测报告
-uv run python -m evals.load_test --generate-report
+# 7. (可选) 一键复现全量压测与评测报告 (零成本离线)
+USE_VERTEX_AI=false uv run python -m evals.load_test --generate-report --mock-llm-stream
 ```
 
 ### 4.2 Docker 实机联调与双通道 SSE 可视化看板
@@ -222,6 +255,12 @@ agentic-rag-eval-engine/
 ├── .github/
 │   └── workflows/
 │       └── ci.yml                  # GitHub Actions 自动化 Ruff + 离线 Pytest CI
+├── .agent/
+│   └── workflows/                  # /plan /debug /verify 项目工作流
+├── .agents/
+│   └── skills/                     # 6 阶段 Spec / TDD 工程技能
+├── docs/
+│   └── assets/                     # README 界面截图
 ├── app/
 │   ├── adapters/
 │   │   └── mock/
@@ -253,11 +292,12 @@ agentic-rag-eval-engine/
 │   ├── dataset_gen.py              # 合成多跳 / 单跳 / 不可回答评测数据集生成器
 │   ├── run_ragas.py                # Ragas v0.2+ OOP 多流水线对比评测器
 │   ├── load_test.py                # 异步高并发双模式压测器与 SLA 校验报告生成
-│   └── benchmark_report.md         # 量化质量与性能基线评测报告
+│   └── benchmark_report.md         # 量化质量与性能基线评测报告 (offline-heuristic)
 ├── scripts/
 │   └── demo_e2e.py                 # 一键端到端流式演示脚本 (--mode asgi / --mode live)
 ├── tests/
 │   ├── sse_viewer.html             # 零构建交互看板 (在线投喂 / 多轮会话 / v1-v3 同屏对比)
+│   ├── test_sse_viewer_ui.py       # 看板结构 / 三语词典 / 导出控件 / README 图片与基准引用回归测试
 │   ├── test_api.py                 # FastAPI 路由、SSE 事件流与 Lifespan 单测
 │   ├── test_container_lifespan.py  # 零配置 Lifespan 容器装配与双模式平滑回退单测
 │   ├── test_demo_e2e.py            # E2E 演示脚本 ASGI 全流程与 SSE 解析单测

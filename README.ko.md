@@ -19,6 +19,26 @@
 
 > **6 GB VRAM 소비자용 엣지 GPU(RTX 3060)** 환경에 최적화된 프로덕션급 자가 교정 **Agentic RAG** 엔진 및 정량 평가 플랫폼입니다. **로컬 LLM 제로 배포(엄격한 `<= 2.3 GB` FP16 VRAM 예산)** 원칙하에 `v1 → v2 → v3` 아키텍처 진화, 이중 채널(Dual-Channel) FastAPI SSE 스트리밍, Redis 8 네이티브 벡터 시맨틱 캐시(Semantic Cache), 그리고 Ragas v0.2+ 및 비동기 고동시성 SLA 자동화 벤치마크를 완벽하게 지원합니다.
 
+## 미리보기 (Preview)
+
+![Arena 동시 비교 및 Citations 검사기 화면](docs/assets/arena-citations-preview.png)
+
+*세 가지 파이프라인(v1 / v2 / v3)을 한 화면에서 스트리밍 비교하며, 오른쪽 Inspector에서 LangGraph 추적과 Citations 근거 카드를 확인합니다.*
+
+![Ragas 정량 베이스라인 화면](docs/assets/ragas-benchmark-preview.png)
+
+*동일한 워크벤치의 Ragas v0.2+ 정량 베이스라인 화면이며, 하단에서 Markdown / JSON 리포트를 원클릭으로 내보낼 수 있습니다.*
+
+### 3세대 아키텍처 진화 한눈에 보기
+
+| 파이프라인 | 핵심 구성 요소 | 해결한 엔지니어링 과제 | Context Recall | Faithfulness | Overall | P95 (부하 테스트, ms) |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| `v1` Naive Baseline | 고정 윈도우 청킹 + Qdrant `int8` Dense 검색 + 단일 단계 생성 | 비교 가능한 최소 베이스라인 확보 | 0.3884 | 0.6392 | 0.6759 | 28.00 |
+| `v2` Hybrid RRF + FP16 Rerank | 시맨틱 Markdown 청킹 + Dense/BM25 + 서버 사이드 RRF + 로컬 `bge-reranker-v2-m3` | 희소/밀집 검색 상호 보완으로 멀티홉 재현율과 순위 정밀도 향상 | 0.7679 | 0.7984 | 0.8554 | 110.06 |
+| `v3` Agentic LangGraph + Redis Semantic Cache | `v2` + 관련성 평가 / 제한적 재작성 / 환각 검증 + Redis 8 시맨틱 캐시 | 환각 억제, 무한 루프 방지, 캐시 히트로 부하 완화 (30.0%) | 1.0000 | 0.9851 | 0.9950 | 680.97 |
+
+> 데이터 출처: [evals/benchmark_report.md](evals/benchmark_report.md) (`offline-heuristic`, 3절 참조).
+
 ---
 
 ## 1. 시스템 아키텍처 개요 (System Architecture)
@@ -111,11 +131,17 @@ flowchart TD
   - `evals/run_ragas.py`: Ragas v0.2+ OOP 메트릭(`LLMContextRecall`, `Faithfulness`, `LLMContextPrecisionWithReference`)과 `RunConfig(max_workers=2, max_retries=5, max_wait=60)`, `asyncio.Semaphore(2)` 동시성 제어를 결합해 `v1 / v2 / v3` 횡단 비교를 수행합니다.
   - `evals/load_test.py`: 오프라인 ASGI(`MOCK_LLM_STREAM=true`) 및 라이브 HTTP 이중 모드 고동시성 부하 테스트를 지원하며, **P95 < 1800 ms** SLA 기준선을 자동 검증하고 `evals/benchmark_report.md`를 생성합니다.
 
+### 2.5 6GB VRAM 최적화, 엔지니어링 하이라이트 및 개발 규약
+- **6 GB VRAM 예산**: 로컬에는 `bge-m3`(~1.1 GB FP16)와 `bge-reranker-v2-m3`(~1.1 GB FP16)만 로드하여 총 ~2.3 GB를 사용하며, 로컬 LLM은 금지하고 추론은 `run_in_executor`로 비동기 오프로딩합니다.
+- **SHA-256 멱등 수집 및 캐시 오염 방지**: 동일 문서는 콘텐츠 해시로 건너뛰고, 수집 시 시맨틱 캐시를 자동 무효화하며, 폴백/HTML 오염 응답은 `is_cacheable_response`가 차단하여 캐시에 기록되지 않습니다.
+- **3개 언어 SSE 워크벤치 및 원클릭 내보내기**: `tests/sse_viewer.html`은 `ZH / EN / KO` 전환, 3세대 동시 스트리밍 비교, 생성 중지를 지원하며 `rag-eval-report-YYYYMMDD-HHMMSS.md / .json` 리포트를 프론트엔드에서 순수 로컬로 내보냅니다.
+- **개발 규약 및 자동화 게이트**: 저장소에 [GEMINI.md](GEMINI.md)(아키텍처 기준선 및 제로 비용 오프라인 규칙), `.agents/skills/`(6단계 Spec / TDD 워크플로 스킬), `.agent/workflows/`(`/plan`, `/debug`, `/verify`)를 공개하며, GitHub Actions CI가 `ruff check`, `ruff format --check`, 오프라인 `pytest`를 실행합니다.
+
 ---
 
 ## 3. 정량 평가 및 성능 부하 테스트 베이스라인 (Benchmark Results)
 
-> 아래 지표는 자동 생성된 [evals/benchmark_report.md](evals/benchmark_report.md)에서 직접 발췌했습니다 (생성 시각: `2026-11-17T18:36:57.049339+00:00`, Judge Mode: `offline-heuristic`, 하드웨어 베이스라인: Windows 11 + RTX 3060 6 GB VRAM).
+> 아래 지표는 자동 생성된 [evals/benchmark_report.md](evals/benchmark_report.md)에서 직접 발췌했습니다 (생성 시각: `2026-11-19T14:35:30.996430+00:00`, Judge Mode: `offline-heuristic`, 하드웨어 베이스라인: Windows 11 + RTX 3060 6 GB VRAM). **Ragas 항목은 결정적 오프라인 휴리스틱 시뮬레이션 결과(재현 가능한 회귀 베이스라인이며 실제 LLM 심사 점수가 아님)이고, 부하 테스트 지연/RPS는 인메모리 ASGI 시뮬레이션 측정값으로 머신 성능에 따라 달라집니다.** 재현: `USE_VERTEX_AI=false uv run python -m evals.load_test --generate-report --mock-llm-stream`.
 
 ### 3.1 Ragas v0.2+ 검색 및 생성 품질 비교 (`v1` vs `v2` vs `v3`)
 
@@ -132,15 +158,22 @@ flowchart TD
 
 | Pipeline | Requests | Concurrency | Mock Stream | Success Rate | Cache Hit Rate | RPS | P50 (ms) | P95 (ms) | P99 (ms) | Mean TTFT (ms) | SLA (< 1800 ms) |
 | --- | ---: | ---: | :---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: |
-| `v1` | 20 | 10 | `true` | 100.0% | 0.0% | 111.37 | 37.58 | 45.28 | 107.34 | 31.96 | **PASS** |
-| `v2` | 20 | 10 | `true` | 100.0% | 0.0% | 64.90 | 98.91 | 104.94 | 106.25 | 98.82 | **PASS** |
-| `v3` | 20 | 10 | `true` | 100.0% | **30.0%** | 19.66 | 445.69 | **678.77** | 684.31 | 441.48 | **PASS** |
+| `v1` | 20 | 10 | `true` | 100.0% | 0.0% | 144.11 | 17.18 | 28.00 | 83.74 | 21.84 | **PASS** |
+| `v2` | 20 | 10 | `true` | 100.0% | 0.0% | 68.33 | 106.79 | 110.06 | 110.38 | 93.04 | **PASS** |
+| `v3` | 20 | 10 | `true` | 100.0% | **30.0%** | 19.55 | 445.01 | **680.97** | 687.77 | 442.66 | **PASS** |
 
-- 동시성 `10`의 SSE 스트리밍 부하 테스트에서 `v3`는 Redis 8 시맨틱 캐시(**30.0%** 히트율)를 통해 **P95 지연을 678.77 ms**로 억제하여, 프로덕션 SLA 기준선(**1800 ms**)을 여유 있게 통과했습니다.
+- 동시성 `10`의 SSE 스트리밍 부하 테스트에서 `v3`는 Redis 8 시맨틱 캐시(**30.0%** 히트율)를 통해 **P95 지연을 680.97 ms**로 억제하여, 프로덕션 SLA 기준선(**1800 ms**)을 여유 있게 통과했습니다.
 
 ---
 
 ## 4. 빠른 시작 및 라이브 데모 가이드 (Quick Start & Live Demo)
+
+**명령 2개로 제로 비용 오프라인 데모 실행** (Docker / GPU / 클라우드 키 불필요, 기본값 `USE_VERTEX_AI=false`):
+
+```bash
+uv sync --all-extras --dev
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8000   # 打开 / open / 접속: http://127.0.0.1:8000/
+```
 
 ### 4.1 제로 설정 오프라인 체험 및 전체 품질 게이트 (Docker / GPU / 클라우드 키 불필요)
 
@@ -169,8 +202,8 @@ uv run pytest -v
 uv run python scripts/demo_e2e.py --mode asgi
 # 데모 실행 로그는 ./data/e2e_demo_transcript.md 에 자동 저장됩니다.
 
-# 7. (선택) 전체 부하 테스트 및 벤치마크 리포트 재현
-uv run python -m evals.load_test --generate-report
+# 7. (선택) 전체 부하 테스트 및 벤치마크 리포트 재현 (제로 비용 오프라인)
+USE_VERTEX_AI=false uv run python -m evals.load_test --generate-report --mock-llm-stream
 ```
 
 ### 4.2 Docker 실환경 연동 및 이중 채널 SSE 시각화 대시보드
@@ -222,6 +255,12 @@ agentic-rag-eval-engine/
 ├── .github/
 │   └── workflows/
 │       └── ci.yml                  # GitHub Actions 자동화 Ruff + 오프라인 Pytest CI
+├── .agent/
+│   └── workflows/                  # /plan /debug /verify 프로젝트 워크플로
+├── .agents/
+│   └── skills/                     # 6단계 Spec / TDD 엔지니어링 스킬
+├── docs/
+│   └── assets/                     # README 스크린샷
 ├── app/
 │   ├── adapters/
 │   │   └── mock/
@@ -253,11 +292,12 @@ agentic-rag-eval-engine/
 │   ├── dataset_gen.py              # 합성 multi-hop / single-hop / unanswerable 평가 데이터셋 생성기
 │   ├── run_ragas.py                # Ragas v0.2+ OOP 멀티 파이프라인 비교 평가기
 │   ├── load_test.py                # 비동기 고동시성 이중 모드 부하 테스터 및 SLA 리포트 생성기
-│   └── benchmark_report.md         # 정량 품질 및 성능 베이스라인 평가 리포트
+│   └── benchmark_report.md         # 정량 품질 및 성능 베이스라인 평가 리포트 (offline-heuristic)
 ├── scripts/
 │   └── demo_e2e.py                 # 원클릭 엔드투엔드 스트리밍 데모 스크립트 (--mode asgi / --mode live)
 ├── tests/
 │   ├── sse_viewer.html             # 제로 빌드 인터랙티브 대시보드 (실시간 수집 / 멀티턴 / v1-v3 동시 비교)
+│   ├── test_sse_viewer_ui.py       # 대시보드 구조 / i18n / 내보내기 컨트롤 / README 이미지 및 벤치마크 회귀 테스트
 │   ├── test_api.py                 # FastAPI 라우트, SSE 스트리밍 및 Lifespan 단위 테스트
 │   ├── test_container_lifespan.py  # 제로 설정 Lifespan 컨테이너 및 이중 모드 폴백 단위 테스트
 │   ├── test_demo_e2e.py            # E2E ASGI 전체 흐름 및 SSE 파서 단위 테스트

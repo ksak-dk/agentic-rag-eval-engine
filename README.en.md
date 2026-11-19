@@ -19,6 +19,26 @@
 
 > A production-grade, self-correcting **Agentic RAG** engine and quantitative evaluation platform purpose-built for **6 GB VRAM consumer edge GPUs (RTX 3060)**: **zero local LLM deployment (strictly <= 2.3 GB FP16 VRAM budget)**, featuring full `v1 → v2 → v3` pipeline evolution, dual-channel FastAPI SSE streaming, Redis 8 native vector semantic caching, and automated Ragas v0.2+ / async high-concurrency SLA benchmarking.
 
+## Preview
+
+![Arena side-by-side comparison with Citations inspector](docs/assets/arena-citations-preview.png)
+
+*Side-by-side streaming of the three pipelines (v1 / v2 / v3); the right-hand Inspector shows the LangGraph trace and Citations evidence cards.*
+
+![Ragas quantitative baseline view](docs/assets/ragas-benchmark-preview.png)
+
+*The same workbench showing the Ragas v0.2+ baseline view; the dock offers one-click Markdown / JSON report export.*
+
+### Pipeline Evolution at a Glance
+
+| Pipeline | Core Components | Engineering Pain Point Solved | Context Recall | Faithfulness | Overall | P95 (load test, ms) |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| `v1` Naive Baseline | Fixed-window chunking + Qdrant `int8` Dense search + single-step generation | Establishes a minimal, comparable baseline | 0.3884 | 0.6392 | 0.6759 | 28.00 |
+| `v2` Hybrid RRF + FP16 Rerank | Semantic Markdown chunking + Dense/BM25 + server-side RRF + local `bge-reranker-v2-m3` | Dense/sparse complementarity improves multi-hop recall and ranking precision | 0.7679 | 0.7984 | 0.8554 | 110.06 |
+| `v3` Agentic LangGraph + Redis Semantic Cache | `v2` + relevance grading / bounded rewrite / hallucination check + Redis 8 semantic cache | Suppresses hallucination, prevents infinite loops, cache hits shave load (30.0%) | 1.0000 | 0.9851 | 0.9950 | 680.97 |
+
+> Source: [evals/benchmark_report.md](evals/benchmark_report.md) (`offline-heuristic`, see Section 3).
+
 ---
 
 ## 1. System Architecture
@@ -111,11 +131,17 @@ Toggleable via `PIPELINE_VERSION` (`v1 | v2 | v3`) within a single unified runti
   - `evals/run_ragas.py`: Evaluates `v1 / v2 / v3` side-by-side using Ragas v0.2+ OOP metrics (`LLMContextRecall`, `Faithfulness`, `LLMContextPrecisionWithReference`) under `RunConfig(max_workers=2, max_retries=5, max_wait=60)` and `asyncio.Semaphore(2)` concurrency control.
   - `evals/load_test.py`: Supports both offline ASGI (`MOCK_LLM_STREAM=true`) and live HTTP high-concurrency load testing, enforcing the **P95 < 1800 ms** SLA gate and generating `evals/benchmark_report.md`.
 
+### 2.5 6 GB VRAM Optimization, Engineering Highlights & Standards
+- **6 GB VRAM budget**: only `bge-m3` (~1.1 GB FP16) and `bge-reranker-v2-m3` (~1.1 GB FP16) are loaded locally (~2.3 GB total); local LLMs are prohibited and inference is offloaded via `run_in_executor`.
+- **SHA-256 idempotent ingestion & cache-pollution guard**: duplicate documents are skipped by content hash; ingestion invalidates the semantic cache; fallback or HTML-polluted answers are blocked by `is_cacheable_response` and never written to the cache.
+- **Trilingual SSE workbench & one-click export**: `tests/sse_viewer.html` supports `ZH / EN / KO`, side-by-side streaming of all three pipelines, abortable generation, and pure-frontend export of `rag-eval-report-YYYYMMDD-HHMMSS.md / .json` reports.
+- **Engineering standards & automated gates**: the repository publishes [GEMINI.md](GEMINI.md) (architecture red lines and zero-cost offline rules), `.agents/skills/` (6-stage Spec / TDD workflow skills) and `.agent/workflows/` (`/plan`, `/debug`, `/verify`); GitHub Actions CI runs `ruff check`, `ruff format --check` and the offline `pytest` suite.
+
 ---
 
 ## 3. Benchmark Results
 
-> The metrics below are quoted directly from the auto-generated [evals/benchmark_report.md](evals/benchmark_report.md) (Generated at: `2026-11-17T18:36:57.049339+00:00`, Judge Mode: `offline-heuristic`, Hardware Baseline: Windows 11 + RTX 3060 6 GB VRAM).
+> The metrics below are quoted directly from the auto-generated [evals/benchmark_report.md](evals/benchmark_report.md) (Generated at: `2026-11-19T14:35:30.996430+00:00`, Judge Mode: `offline-heuristic`, Hardware Baseline: Windows 11 + RTX 3060 6 GB VRAM). **The Ragas section comes from a deterministic offline heuristic simulation (a reproducible regression baseline, not real LLM-judge scores); load-test latency and RPS are measured on an in-memory ASGI simulation and vary with machine performance.** Reproduce: `USE_VERTEX_AI=false uv run python -m evals.load_test --generate-report --mock-llm-stream`.
 
 ### 3.1 Ragas v0.2+ Retrieval & Generation Quality (`v1` vs `v2` vs `v3`)
 
@@ -132,15 +158,22 @@ Toggleable via `PIPELINE_VERSION` (`v1 | v2 | v3`) within a single unified runti
 
 | Pipeline | Requests | Concurrency | Mock Stream | Success Rate | Cache Hit Rate | RPS | P50 (ms) | P95 (ms) | P99 (ms) | Mean TTFT (ms) | SLA (< 1800 ms) |
 | --- | ---: | ---: | :---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: |
-| `v1` | 20 | 10 | `true` | 100.0% | 0.0% | 111.37 | 37.58 | 45.28 | 107.34 | 31.96 | **PASS** |
-| `v2` | 20 | 10 | `true` | 100.0% | 0.0% | 64.90 | 98.91 | 104.94 | 106.25 | 98.82 | **PASS** |
-| `v3` | 20 | 10 | `true` | 100.0% | **30.0%** | 19.66 | 445.69 | **678.77** | 684.31 | 441.48 | **PASS** |
+| `v1` | 20 | 10 | `true` | 100.0% | 0.0% | 144.11 | 17.18 | 28.00 | 83.74 | 21.84 | **PASS** |
+| `v2` | 20 | 10 | `true` | 100.0% | 0.0% | 68.33 | 106.79 | 110.06 | 110.38 | 93.04 | **PASS** |
+| `v3` | 20 | 10 | `true` | 100.0% | **30.0%** | 19.55 | 445.01 | **680.97** | 687.77 | 442.66 | **PASS** |
 
-- Under SSE streaming load at concurrency `10`, `v3` leverages the Redis 8 semantic cache (**30.0%** hit rate) to hold **P95 latency at 678.77 ms**, well below the **1800 ms** production SLA threshold.
+- Under SSE streaming load at concurrency `10`, `v3` leverages the Redis 8 semantic cache (**30.0%** hit rate) to hold **P95 latency at 680.97 ms**, well below the **1800 ms** production SLA threshold.
 
 ---
 
 ## 4. Quick Start & Live Demo
+
+**Two commands to a zero-cost offline demo** (no Docker / GPU / cloud keys; `USE_VERTEX_AI=false` by default):
+
+```bash
+uv sync --all-extras --dev
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8000   # 打开 / open / 접속: http://127.0.0.1:8000/
+```
 
 ### 4.1 Zero-Config Offline Experience & Full Quality Gates (No Docker / GPU / Cloud Keys Required)
 
@@ -169,8 +202,8 @@ uv run pytest -v
 uv run python scripts/demo_e2e.py --mode asgi
 # Transcript is automatically saved to ./data/e2e_demo_transcript.md
 
-# 7. (Optional) Reproduce the full load test and benchmark report
-uv run python -m evals.load_test --generate-report
+# 7. (Optional) Reproduce the full load test and benchmark report (zero-cost offline)
+USE_VERTEX_AI=false uv run python -m evals.load_test --generate-report --mock-llm-stream
 ```
 
 ### 4.2 Docker Live Integration & Dual-Channel SSE Viewer
@@ -222,6 +255,12 @@ agentic-rag-eval-engine/
 ├── .github/
 │   └── workflows/
 │       └── ci.yml                  # Automated GitHub Actions Ruff + offline Pytest CI
+├── .agent/
+│   └── workflows/                  # /plan /debug /verify project workflows
+├── .agents/
+│   └── skills/                     # 6-stage Spec / TDD engineering skills
+├── docs/
+│   └── assets/                     # README screenshots
 ├── app/
 │   ├── adapters/
 │   │   └── mock/
@@ -253,11 +292,12 @@ agentic-rag-eval-engine/
 │   ├── dataset_gen.py              # Synthetic multi-hop / single-hop / unanswerable dataset generator
 │   ├── run_ragas.py                # Ragas v0.2+ OOP cross-pipeline evaluator
 │   ├── load_test.py                # Async dual-mode load tester & SLA report generator
-│   └── benchmark_report.md         # Quantitative quality and performance benchmark report
+│   └── benchmark_report.md         # Quantitative quality and performance benchmark report (offline-heuristic)
 ├── scripts/
 │   └── demo_e2e.py                 # End-to-end streaming demo script (--mode asgi / --mode live)
 ├── tests/
 │   ├── sse_viewer.html             # Zero-build interactive dashboard (live ingest / sessions / v1-v3 compare)
+│   ├── test_sse_viewer_ui.py       # Dashboard structure / i18n / export controls / README image & benchmark regression tests
 │   ├── test_api.py                 # FastAPI routes, SSE streaming & Lifespan unit tests
 │   ├── test_container_lifespan.py  # Zero-config Lifespan container & dual-mode fallback unit tests
 │   ├── test_demo_e2e.py            # E2E ASGI flow & SSE parser unit tests
