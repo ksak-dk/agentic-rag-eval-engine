@@ -91,6 +91,7 @@ build-backend = "hatchling.build"
 target-version = "py311"
 line-length = 100
 src = ["app", "evals", "tests"]
+extend-exclude = [".agents", ".agent"]
 
 [tool.ruff.lint]
 select = [

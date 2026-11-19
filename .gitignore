@@ -77,14 +77,6 @@ Thumbs.db
 # --- Docker ---
 docker-compose.override.yml
 
-# --- Benchmark Reports (generated) ---
-evals/benchmark_report.md
-
 # --- Automated Session Handover & Temporary Specs (generated locally, NEVER commit) ---
 HANDOVER.md
 UPDATE_SPEC.md
-
-# Local AI Agent workflow & handover scaffolding
-.agents/
-UPDATE_SPEC.md
-HANDOVER.md

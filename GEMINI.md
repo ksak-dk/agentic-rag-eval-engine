@@ -13,7 +13,7 @@
 
 ---
 
-## 1. Hardware Architecture Constraints (天选3 AMD Edition)
+## 1. Hardware Architecture Constraints (Local Dev Machine (6GB VRAM Baseline))
 
 | Resource       | Spec                                      | Constraint                                   |
 |----------------|-------------------------------------------|----------------------------------------------|
@@ -128,21 +128,25 @@ Each module is accepted when:
 
 ## Agentic Workflow & Blast-Radius Gates
 
-本仓库在 `.agent/workflows/` 下接入标准化斜杠工作流，所有代理协作必须遵守以下工作流与安全门禁：
+本仓库采用 **6 阶段技能工作流（`.agents/skills/`）+ 项目专属验证门禁（`.agent/workflows/verify.md`）** 协同开发，所有代理必须遵守以下路由与安全限制：
 
-- **标准化工作流声明（`.agent/workflows/`）**：
-  - `/plan`（`.agent/workflows/plan.md`）：规约驱动计划工作流。开发新特性或修改超过 2 个文件前必须触发；支持直接接收内联 `--- SPEC START ---` 规约块并自动提取覆写根目录 `UPDATE_SPEC.md`（已由 `.gitignore` 忽略，用完后**严禁提交到 Git**），若未提供内联分隔符则优先读取根目录已有 `UPDATE_SPEC.md`，随后输出拆解为 2～5 分钟可验证原子步骤的 `Implementation Plan` Artifact；当存在有效 `UPDATE_SPEC.md` 时自动放行执行（`auto_approve: true`），无需暂停等待人工确认。
-  - `/debug`（`.agent/workflows/debug.md`）：系统化根因排查工作流。严格执行 `Reproduce -> Isolate -> Fix -> Verify` 四步法，严禁未复现前盲目试错打补丁。
-  - `/verify`（`.agent/workflows/verify.md`）：完成前强制证据门禁与交接工作流。收尾前必须实跑 `uv run ruff check .`、`uv run ruff format --check .`、`uv run pytest -v` 并附上真实退出码与摘要（涉及 `tests/sse_viewer.html` 时按需做浏览器巡检），通过后按 Section 8 自动更新 `HANDOVER.md`。执行 `pytest` 时必须申请前台非沙箱权限（允许 `127.0.0.1` 回环通信），严禁丢入沙箱后台任务运行。
+- **6 阶段技能路由（`.agents/skills/`）**：
+  1. **DEFINE**：使用 `@skills/spec-driven-development`，先扫描现有代码对齐边界（明确改什么、**不改什么**），将确认后的变更规约写入根目录 `UPDATE_SPEC.md`（已被 `.gitignore` 忽略，严禁提交到 Git）。
+  2. **PLAN**：使用 `@skills/planning-and-task-breakdown`（配合 `/plan`），读取 `UPDATE_SPEC.md` 拆解为 2～5 分钟可验证的原子步骤；**必须暂停等待人工确认计划后再开始写代码**（除非用户在指令中显式声明自动放行）。
+  3. **BUILD / DEBUG**：核心逻辑变更遵循 `@skills/test-driven-development`；遇到报错或回归故障时切换至 `@skills/debugging-and-error-recovery`，严格按复现 → 定位 → 修复 → 验证执行，严禁盲猜打补丁。
+  4. **VERIFY**：执行项目专属 `/verify`（`.agent/workflows/verify.md`），在前台非沙箱环境（允许 `127.0.0.1` 回环通信、严格遵守 Section 0 零成本离线模式）实跑 `uv run ruff check .`、`uv run ruff format --check .`、`uv run pytest -v`，附上真实退出码与结果摘要。
+  5. **REVIEW & CLEANUP**：提交前使用 `@skills/code-review-and-quality` 与 `@skills/code-simplification` 检查 `git diff`，清除过度设计与无关改动。
+  6. **SHIP**：按 Section 5 规范提交，并按 Section 8 立即覆盖更新根目录 `HANDOVER.md`。
+
+- **外科手术式修改原则（Existing Codebase Guardrail）**：
+  - 仅修改与当前 `UPDATE_SPEC.md` 直接相关的文件与代码行，**严禁顺手重构、重命名或格式化无关的历史代码**。
 
 - **爆炸半径拦截门禁（Blast-Radius Gates）**：
   遇到以下高影响变更时，代理**必须立即暂停并请求人工确认**，严禁擅自修改或提交：
   1. 修改 `pyproject.toml` 新增、升级或移除第三方依赖；
   2. 更改 `/api/v1/` 公共接口签名、端点路径或请求/响应 Pydantic 契约；
-  3. 破坏或改写原有 56 项 `pytest` 单测基线断言；
+  3. 破坏或改写现有全量 `pytest` 单测基线断言（当前 65 项）；
   4. 修改 GitHub Actions CI/CD 配置文件（`.github/workflows/`）。
-
-- **Autonomous Execution Policy**: When running `/plan` with a valid `UPDATE_SPEC.md`, automatically treat the generated Implementation Plan as approved (`auto_approve: true`) and proceed immediately to coding, `/verify` quality gates, and `HANDOVER.md` updates without pausing for manual confirmation.
 
 - **全局语言规范 (Language Policy)**:
   1. 所有面向用户的自然语言输出（包括 `Implementation Plan`、`Task` 清单、`Walkthrough`、代码审查说明、`HANDOVER.md` 说明正文及日常对话）必须默认使用**简体中文**。
