@@ -6,6 +6,13 @@
 
 ---
 
+## 0. 最高优先级零成本安全约束 (Zero-Cost Safety Lock)
+
+- **永久红线**：**严禁开启 `USE_VERTEX_AI=true` 或发起任何真实云端付费 LLM / Vertex AI API 调用**。
+- **默认运行模式**：所有开发、单元测试、集成测试、并发压测（`evals/load_test.py`）、Ragas 评测（`evals/run_ragas.py`）与 `/verify` 验证流程，**必须默认运行在 `USE_VERTEX_AI=false` 与 `offline_mode=True` 的零成本离线模式下**，严禁绕过该限制，除非获得人工显式授权。
+
+---
+
 ## 1. Hardware Architecture Constraints (天选3 AMD Edition)
 
 | Resource       | Spec                                      | Constraint                                   |
