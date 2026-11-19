@@ -25,7 +25,6 @@
       --warn: #f59e0b;
       --err: #ef4444;
       --gradient-brand: linear-gradient(135deg, #6366f1 0%, #06b6d4 100%);
-      --gradient-v3: linear-gradient(135deg, rgba(99, 102, 241, 0.22) 0%, rgba(16, 185, 129, 0.18) 100%);
       --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
       --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", "Malgun Gothic", sans-serif;
     }
@@ -47,7 +46,6 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    /* Scrollbar styling */
     ::-webkit-scrollbar {
       width: 6px;
       height: 6px;
@@ -69,19 +67,20 @@
       height: 100vh;
       width: 100vw;
       overflow: hidden;
+      position: relative;
     }
 
     /* 1. Top Header Bar */
     .top-header {
-      height: 58px;
-      min-height: 58px;
-      background: rgba(15, 23, 42, 0.92);
+      height: 56px;
+      min-height: 56px;
+      background: rgba(15, 23, 42, 0.94);
       border-bottom: 1px solid var(--border);
-      padding: 0 18px;
+      padding: 0 14px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 14px;
+      gap: 10px;
       z-index: 30;
       backdrop-filter: blur(10px);
     }
@@ -89,25 +88,47 @@
     .brand-cluster {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 9px;
       min-width: 0;
     }
 
+    .sidebar-toggle-btn {
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      border-radius: 7px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .sidebar-toggle-btn:hover:not(:disabled) {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(56, 189, 248, 0.08);
+    }
+
     .brand-logo {
-      width: 32px;
-      height: 32px;
+      width: 30px;
+      height: 30px;
       border-radius: 8px;
       background: var(--gradient-brand);
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 0 16px rgba(99, 102, 241, 0.35);
+      box-shadow: 0 0 14px rgba(99, 102, 241, 0.35);
       flex-shrink: 0;
     }
 
     .brand-logo svg {
-      width: 18px;
-      height: 18px;
+      width: 16px;
+      height: 16px;
       color: #ffffff;
     }
 
@@ -120,12 +141,12 @@
     .brand-title-row {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 7px;
     }
 
     h1 {
       margin: 0;
-      font-size: 0.98rem;
+      font-size: 0.94rem;
       font-weight: 700;
       letter-spacing: 0.01em;
       color: #f8fafc;
@@ -134,9 +155,9 @@
 
     .version-badge {
       font-family: var(--mono);
-      font-size: 0.7rem;
+      font-size: 0.68rem;
       font-weight: 700;
-      padding: 1px 7px;
+      padding: 1px 6px;
       border-radius: 999px;
       background: rgba(99, 102, 241, 0.18);
       border: 1px solid rgba(99, 102, 241, 0.45);
@@ -145,11 +166,12 @@
     }
 
     .brand-subtitle {
-      font-size: 0.72rem;
+      font-size: 0.7rem;
       color: var(--muted);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      max-width: 360px;
     }
 
     /* Segmented View Switcher */
@@ -161,6 +183,7 @@
       border-radius: 9px;
       padding: 3px;
       gap: 4px;
+      flex-shrink: 0;
     }
 
     .seg-btn {
@@ -168,13 +191,13 @@
       color: var(--muted);
       border: none;
       border-radius: 6px;
-      padding: 6px 13px;
-      font-size: 0.8rem;
+      padding: 5px 11px;
+      font-size: 0.78rem;
       font-weight: 600;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
       transition: all 0.16s ease;
       white-space: nowrap;
     }
@@ -193,13 +216,13 @@
     .header-right {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
       flex-shrink: 0;
     }
 
     .status-pill {
       font-family: var(--mono);
-      font-size: 0.75rem;
+      font-size: 0.73rem;
       padding: 4px 10px;
       border-radius: 999px;
       background: var(--bg-card-alt);
@@ -209,6 +232,41 @@
       align-items: center;
       gap: 6px;
       white-space: nowrap;
+    }
+
+    button.ingest-trigger-btn {
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.15s ease;
+    }
+
+    button.ingest-trigger-btn:hover:not(:disabled) {
+      border-color: var(--accent);
+      color: #f8fafc;
+      background: rgba(56, 189, 248, 0.16);
+      transform: translateY(-1px);
+    }
+
+    .icon-pill-btn {
+      height: 29px;
+      padding: 0 10px;
+      border-radius: 999px;
+      background: var(--bg-card-alt);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      font-size: 0.76rem;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .icon-pill-btn:hover:not(:disabled) {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(56, 189, 248, 0.1);
     }
 
     .status-pill.running {
@@ -250,8 +308,8 @@
       color: var(--muted);
       border: none;
       border-radius: 5px;
-      padding: 4px 8px;
-      font-size: 0.73rem;
+      padding: 4px 7px;
+      font-size: 0.71rem;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.15s ease;
@@ -272,20 +330,39 @@
     .workbench-grid {
       flex: 1;
       display: grid;
-      grid-template-columns: 295px minmax(0, 1fr) 365px;
+      grid-template-columns: 232px minmax(0, 1fr) 365px;
       overflow: hidden;
       min-height: 0;
+      transition: grid-template-columns 0.2s ease;
     }
 
-    /* Left Sidebar */
+    .workbench-grid.left-collapsed {
+      grid-template-columns: 0px minmax(0, 1fr) 365px;
+    }
+
+    /* Left Sidebar: Slimmed Session History Only */
     .sidebar-left {
       background: var(--bg-surface);
       border-right: 1px solid var(--border);
       display: flex;
       flex-direction: column;
-      overflow-y: auto;
-      padding: 12px;
-      gap: 12px;
+      overflow: hidden;
+      padding: 10px;
+      gap: 10px;
+      min-height: 0;
+      transition: opacity 0.18s ease, padding 0.18s ease;
+    }
+
+    .workbench-grid.left-collapsed .sidebar-left {
+      padding: 0;
+      border-right: none;
+      overflow: hidden;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .session-panel {
+      flex: 1;
       min-height: 0;
     }
 
@@ -302,10 +379,10 @@
     .canvas-scroll {
       flex: 1;
       overflow-y: auto;
-      padding: 16px 20px;
+      padding: 14px 18px;
       display: flex;
       flex-direction: column;
-      gap: 14px;
+      gap: 12px;
       min-height: 0;
     }
 
@@ -321,42 +398,43 @@
 
     /* Reusable Panel & Card Styles */
     .panel-box {
-      background: rgba(30, 41, 59, 0.55);
+      background: rgba(30, 41, 59, 0.52);
       border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 12px;
+      padding: 11px;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 9px;
     }
 
     .panel-title-bar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
+      gap: 6px;
     }
 
     .panel-title {
       margin: 0;
-      font-size: 0.78rem;
+      font-size: 0.76rem;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.04em;
       color: var(--accent);
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
     }
 
     .micro-badge {
       font-family: var(--mono);
-      font-size: 0.68rem;
+      font-size: 0.66rem;
       padding: 2px 7px;
       border-radius: 999px;
       background: rgba(99, 102, 241, 0.14);
       border: 1px solid rgba(99, 102, 241, 0.32);
       color: #c7d2fe;
+      white-space: nowrap;
     }
 
     .field {
@@ -366,7 +444,7 @@
     }
 
     label {
-      font-size: 0.74rem;
+      font-size: 0.73rem;
       color: var(--muted);
       font-weight: 500;
     }
@@ -382,7 +460,7 @@
       border-radius: 7px;
       padding: 7px 10px;
       font-family: var(--sans);
-      font-size: 0.82rem;
+      font-size: 0.81rem;
       transition: border-color 0.15s ease;
     }
 
@@ -398,7 +476,7 @@
     input[type="number"],
     select {
       font-family: var(--mono);
-      font-size: 0.78rem;
+      font-size: 0.76rem;
     }
 
     textarea {
@@ -412,7 +490,7 @@
       border: none;
       border-radius: 7px;
       padding: 8px 14px;
-      font-size: 0.82rem;
+      font-size: 0.81rem;
       font-weight: 600;
       cursor: pointer;
       white-space: nowrap;
@@ -437,8 +515,8 @@
       background: var(--bg-input);
       color: var(--text-secondary);
       border: 1px solid var(--border);
-      padding: 6px 10px;
-      font-size: 0.75rem;
+      padding: 5px 8px;
+      font-size: 0.72rem;
     }
 
     button.secondary:hover:not(:disabled) {
@@ -457,19 +535,39 @@
       color: #ffffff;
     }
 
+    button.stop-btn {
+      background: rgba(239, 68, 68, 0.18);
+      border: 1px solid rgba(239, 68, 68, 0.65);
+      color: #fca5a5;
+    }
+
+    button.stop-btn:hover:not(:disabled) {
+      background: #ef4444;
+      border-color: #ef4444;
+      color: #ffffff;
+    }
+
     .session-inline {
       display: flex;
-      gap: 6px;
+      gap: 5px;
       align-items: stretch;
+    }
+
+    .session-inline input[type="text"] {
+      min-width: 0;
+      flex: 1;
+      padding: 6px 7px;
+      font-size: 0.72rem;
     }
 
     .session-timeline {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      max-height: 230px;
+      gap: 7px;
+      flex: 1;
       overflow-y: auto;
       padding-right: 2px;
+      min-height: 80px;
     }
 
     .timeline-item {
@@ -477,7 +575,7 @@
       border: 1px solid var(--border);
       border-left: 3px solid var(--indigo);
       border-radius: 7px;
-      padding: 8px 10px;
+      padding: 7px 9px;
       cursor: pointer;
       transition: border-color 0.15s ease, background 0.15s ease;
     }
@@ -491,34 +589,30 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 6px;
+      gap: 4px;
       flex-wrap: wrap;
       font-family: var(--mono);
-      font-size: 0.69rem;
+      font-size: 0.67rem;
       color: var(--muted);
-      margin-bottom: 4px;
+      margin-bottom: 3px;
     }
 
     .timeline-query {
       font-weight: 600;
       color: var(--text);
-      font-size: 0.78rem;
+      font-size: 0.75rem;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
     .timeline-answer {
-      font-size: 0.74rem;
+      font-size: 0.71rem;
       color: var(--muted);
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-      margin-top: 3px;
+      margin-top: 2px;
     }
 
-    /* Accordion Details in Left Sidebar */
+    /* Accordion Details (used for Playground Raw Metrics) */
     details.sidebar-accordion {
       background: rgba(30, 41, 59, 0.55);
       border: 1px solid var(--border);
@@ -532,7 +626,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 0.78rem;
+      font-size: 0.76rem;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.04em;
@@ -555,12 +649,12 @@
 
     .ingest-status {
       margin-top: 4px;
-      padding: 7px 9px;
-      border-radius: 6px;
+      padding: 8px 10px;
+      border-radius: 7px;
       border: 1px solid var(--border);
       background: var(--bg-input);
       font-family: var(--mono);
-      font-size: 0.72rem;
+      font-size: 0.73rem;
       color: var(--muted);
       display: none;
       word-break: break-all;
@@ -570,9 +664,114 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 0.78rem;
+      font-size: 0.8rem;
       color: var(--text-secondary);
       cursor: pointer;
+      padding: 4px 0;
+    }
+
+    /* Slide-Over Drawers (R2) */
+    .drawer-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.65);
+      backdrop-filter: blur(3px);
+      z-index: 60;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+
+    .drawer-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .slide-drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 420px;
+      max-width: 92vw;
+      background: var(--bg-surface);
+      border-left: 1px solid var(--border-strong);
+      box-shadow: -12px 0 36px rgba(2, 6, 23, 0.72);
+      z-index: 70;
+      display: flex;
+      flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.22s ease;
+    }
+
+    .slide-drawer.open {
+      transform: translateX(0);
+    }
+
+    .drawer-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: rgba(15, 23, 42, 0.92);
+    }
+
+    .drawer-header-titles {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .drawer-title {
+      margin: 0;
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+
+    .drawer-subtitle {
+      font-family: var(--mono);
+      font-size: 0.71rem;
+      color: #a5b4fc;
+      white-space: normal;
+      line-height: 1.4;
+    }
+
+    .drawer-close-btn {
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      border-radius: 7px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.92rem;
+      flex-shrink: 0;
+    }
+
+    .drawer-close-btn:hover:not(:disabled) {
+      border-color: var(--accent);
+      color: var(--text);
+      background: rgba(56, 189, 248, 0.12);
+    }
+
+    .drawer-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .drawer-body textarea {
+      min-height: 190px;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      line-height: 1.5;
     }
 
     /* Center Canvas: Arena & Playground Views */
@@ -590,11 +789,12 @@
       display: flex;
       align-items: center;
       gap: 8px;
+      flex-wrap: wrap;
     }
 
     .canvas-view-title h2 {
       margin: 0;
-      font-size: 0.92rem;
+      font-size: 0.9rem;
       font-weight: 700;
       color: #f8fafc;
     }
@@ -603,7 +803,7 @@
     .compare-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 14px;
+      gap: 12px;
       flex: 1;
       min-height: 290px;
     }
@@ -624,18 +824,18 @@
     }
 
     .compare-card.inspected {
-      border-color: rgba(56, 189, 248, 0.55);
-      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.2), 0 8px 24px rgba(2, 6, 23, 0.45);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.35), 0 10px 26px rgba(2, 6, 23, 0.55);
     }
 
     .compare-card.card-v3 {
-      border-color: rgba(139, 92, 246, 0.45);
+      border-color: rgba(139, 92, 246, 0.42);
       background: linear-gradient(180deg, rgba(99, 102, 241, 0.07) 0%, rgba(15, 23, 42, 0.96) 140px);
     }
 
     .compare-card.card-v3.inspected {
       border-color: #10b981;
-      box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.25), 0 8px 26px rgba(16, 185, 129, 0.12);
+      box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.38), 0 10px 28px rgba(16, 185, 129, 0.16);
     }
 
     .compare-card-header {
@@ -644,7 +844,7 @@
       display: flex;
       flex-direction: column;
       gap: 4px;
-      background: rgba(15, 23, 42, 0.7);
+      background: rgba(15, 23, 42, 0.72);
     }
 
     .compare-card-toprow {
@@ -656,7 +856,7 @@
 
     .pipeline-badge {
       font-family: var(--mono);
-      font-size: 0.75rem;
+      font-size: 0.74rem;
       font-weight: 700;
       padding: 2px 8px;
       border-radius: 6px;
@@ -685,7 +885,7 @@
 
     .rec-tag {
       font-family: var(--mono);
-      font-size: 0.65rem;
+      font-size: 0.64rem;
       font-weight: 700;
       padding: 1px 6px;
       border-radius: 999px;
@@ -695,7 +895,7 @@
     }
 
     .pipeline-arch-desc {
-      font-size: 0.71rem;
+      font-size: 0.7rem;
       color: var(--muted);
       font-family: var(--mono);
     }
@@ -711,47 +911,115 @@
       min-height: 180px;
     }
 
-    /* Inline Telemetry Pills Bar */
-    .telemetry-pills {
-      padding: 8px 10px;
-      border-top: 1px solid var(--border);
-      background: rgba(9, 13, 22, 0.65);
+    /* Arena Empty State: Differentiated Feature Tags (R3) */
+    .arena-empty-state {
       display: flex;
-      flex-wrap: wrap;
-      gap: 5px;
-      align-items: center;
+      flex-direction: column;
+      justify-content: space-between;
+      height: 100%;
+      gap: 12px;
     }
 
-    .telemetry-pill {
-      font-family: var(--mono);
-      font-size: 0.69rem;
-      padding: 2px 7px;
-      border-radius: 999px;
-      background: rgba(30, 41, 59, 0.9);
-      border: 1px solid var(--border);
+    .arch-tags-col {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      margin-top: 2px;
+    }
+
+    .arch-feature-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
       color: var(--text-secondary);
+      background: rgba(11, 17, 32, 0.65);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 6px 9px;
+      line-height: 1.35;
+    }
+
+    .arch-feature-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--accent);
+      flex-shrink: 0;
+    }
+
+    .card-v1 .arch-feature-dot {
+      background: #94a3b8;
+    }
+
+    .card-v2 .arch-feature-dot {
+      background: #22d3ee;
+    }
+
+    .card-v3 .arch-feature-dot {
+      background: #10b981;
+    }
+
+    .arena-empty-hint {
+      font-size: 0.72rem;
+      color: var(--muted);
+      padding-top: 8px;
+      border-top: 1px dashed rgba(148, 163, 184, 0.16);
+    }
+
+    /* Compact Single-Line Telemetry Bar (R3) */
+    .telemetry-bar {
+      padding: 6px 10px;
+      border-top: 1px solid var(--border);
+      background: rgba(9, 13, 22, 0.75);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: none;
+      font-family: var(--sans);
+      font-size: 0.68rem;
+      color: var(--text-secondary);
+    }
+
+    .telemetry-bar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .tele-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
       white-space: nowrap;
     }
 
-    .telemetry-pill.hit {
-      color: #4ade80;
-      border-color: rgba(34, 197, 94, 0.45);
-      background: rgba(34, 197, 94, 0.12);
+    .tele-sep {
+      color: rgba(148, 163, 184, 0.4);
+      user-select: none;
     }
 
-    .telemetry-pill.miss {
-      color: #cbd5e1;
-      border-color: rgba(148, 163, 184, 0.25);
-    }
-
-    .telemetry-pill.ttft {
+    .tele-ttft {
       color: #38bdf8;
-      border-color: rgba(56, 189, 248, 0.35);
+      font-weight: 600;
     }
 
-    .telemetry-pill.rewrite {
+    .tele-hit {
+      color: #4ade80;
+      font-weight: 700;
+    }
+
+    .tele-miss {
+      color: #cbd5e1;
+    }
+
+    .tele-rewrite {
       color: #c084fc;
-      border-color: rgba(192, 132, 252, 0.35);
+    }
+
+    .tele-stopped {
+      color: var(--warn);
+      font-weight: 600;
     }
 
     /* Single-Channel Playground View */
@@ -810,7 +1078,7 @@
       word-break: break-all;
     }
 
-    /* Bottom-Docked Prompt & Quick-Start Pills */
+    /* Bottom-Docked Prompt Bar with Mode-Driven Action Button (R1) */
     .prompt-dock {
       background: rgba(15, 23, 42, 0.96);
       border-top: 1px solid var(--border);
@@ -829,7 +1097,7 @@
     }
 
     .quick-pills-label {
-      font-size: 0.72rem;
+      font-size: 0.71rem;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.04em;
@@ -851,7 +1119,7 @@
       color: #e2e8f0;
       border-radius: 8px;
       padding: 6px 10px;
-      font-size: 0.74rem;
+      font-size: 0.73rem;
       font-weight: 600;
       text-align: left;
       cursor: pointer;
@@ -871,8 +1139,36 @@
 
     .dock-input-row {
       display: flex;
-      gap: 10px;
+      gap: 9px;
       align-items: stretch;
+    }
+
+    .playground-pipe-inline {
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      gap: 3px;
+      min-width: 112px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 4px 8px;
+    }
+
+    .playground-pipe-inline label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+    }
+
+    .playground-pipe-inline select {
+      padding: 2px 4px;
+      border: none;
+      background: transparent;
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 0.78rem;
     }
 
     .dock-input-row textarea {
@@ -886,8 +1182,12 @@
 
     .dock-actions {
       display: flex;
-      gap: 7px;
       align-items: stretch;
+    }
+
+    .dock-actions button {
+      min-width: 170px;
+      padding: 0 16px;
     }
 
     .error-banner {
@@ -975,8 +1275,14 @@
     }
 
     .trace-node.skipped {
-      opacity: 0.52;
+      opacity: 0.48;
       border-left-color: #334155;
+    }
+
+    .trace-node.stopped {
+      opacity: 0.82;
+      border-left-color: var(--warn);
+      border-color: rgba(245, 158, 11, 0.35);
     }
 
     .trace-node.warn {
@@ -1024,6 +1330,11 @@
       border-color: var(--accent);
     }
 
+    .trace-node.stopped .trace-node-badge {
+      color: var(--warn);
+      border-color: rgba(245, 158, 11, 0.45);
+    }
+
     /* Right Sidebar Lower Tabs */
     .inspector-tabs-bar {
       display: grid;
@@ -1041,7 +1352,7 @@
       border-bottom: 2px solid transparent;
       border-radius: 0;
       padding: 7px 6px;
-      font-size: 0.75rem;
+      font-size: 0.74rem;
       font-weight: 700;
       cursor: pointer;
     }
@@ -1332,10 +1643,18 @@
 
     .placeholder {
       color: var(--muted);
-      font-size: 0.8rem;
+      font-size: 0.78rem;
     }
 
-    /* Responsive collapse for screens < 1024px */
+    @media (max-width: 1280px) {
+      .brand-subtitle {
+        display: none;
+      }
+      .btn-compact-label {
+        display: none;
+      }
+    }
+
     @media (max-width: 1024px) {
       html, body, .workbench-shell {
         height: auto;
@@ -1346,7 +1665,8 @@
         padding: 10px 14px;
         flex-wrap: wrap;
       }
-      .workbench-grid {
+      .workbench-grid,
+      .workbench-grid.left-collapsed {
         grid-template-columns: 1fr;
         overflow: visible;
       }
@@ -1355,20 +1675,42 @@
         border-bottom: 1px solid var(--border);
         overflow: visible;
       }
+      .workbench-grid.left-collapsed .sidebar-left {
+        display: none;
+      }
       .compare-grid {
         grid-template-columns: 1fr;
       }
       .quick-pills-row {
         grid-template-columns: 1fr 1fr;
       }
+      .dock-input-row {
+        flex-wrap: wrap;
+      }
+      .dock-actions button {
+        width: 100%;
+      }
     }
   </style>
 </head>
 <body>
   <div class="workbench-shell">
-    <!-- 1. Top Global Status & i18n Navigation Bar -->
+    <!-- 1. Top Global Status, View Mode Switcher & Drawer Triggers -->
     <header class="top-header">
       <div class="brand-cluster">
+        <button
+          id="toggleLeftSidebarBtn"
+          class="sidebar-toggle-btn"
+          type="button"
+          aria-expanded="true"
+          data-i18n-title="btn_toggle_sidebar"
+          title="折叠 / 展开左侧会话栏"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="9" y1="3" x2="9" y2="21"></line>
+          </svg>
+        </button>
         <div class="brand-logo" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
@@ -1380,12 +1722,12 @@
             <span class="version-badge">v2.0+</span>
           </div>
           <div class="brand-subtitle" data-i18n="brand_subtitle">
-            Agentic RAG Dual-Channel SSE Viewer · Hybrid RRF · FP16 Rerank · LangGraph Workbench
+            Agentic RAG Dual-Channel SSE Viewer · Hybrid RRF · FP16 Rerank · LangGraph 企业级工作台
           </div>
         </div>
       </div>
 
-      <!-- Segmented View Control (Arena default active) -->
+      <!-- Segmented View Control (Single Source of Truth) -->
       <div class="segmented-control" role="tablist" aria-label="Workspace View Switcher">
         <button id="viewModeArenaBtn" class="seg-btn active" type="button" data-i18n="nav_arena">
           ⚡ v1 / v2 / v3 同屏竞技场 (Arena View)
@@ -1396,102 +1738,63 @@
       </div>
 
       <div class="header-right">
-        <span id="storeChunksBadge" class="status-pill">🟢 Online | Chunks: -- | Mode: auto</span>
+        <button
+          id="storeChunksBadge"
+          class="status-pill ingest-trigger-btn"
+          type="button"
+          data-i18n-title="drawer_ingest_title"
+          title="知识库入库 (Live Ingest)"
+        >
+          <span id="storeChunksText">📥 在线 | Chunks: -- · 知识库入库</span>
+        </button>
+        <button
+          id="openSettingsDrawerBtn"
+          class="icon-pill-btn"
+          type="button"
+          data-i18n-title="drawer_settings_title"
+          title="高级连接设置 (Settings)"
+        >
+          <span aria-hidden="true">⚙️</span>
+          <span class="btn-compact-label" data-i18n="btn_top_settings">设置</span>
+        </button>
         <span id="statusPill" class="status-pill">idle</span>
         <div class="lang-switcher" role="group" aria-label="Language Switcher">
-          <button type="button" class="lang-btn active" data-lang="zh">简体中文 (ZH)</button>
-          <button type="button" class="lang-btn" data-lang="en">English (EN)</button>
-          <button type="button" class="lang-btn" data-lang="ko">한국어 (KO)</button>
+          <button type="button" class="lang-btn active" data-lang="zh">中文 (ZH)</button>
+          <button type="button" class="lang-btn" data-lang="en">EN</button>
+          <button type="button" class="lang-btn" data-lang="ko">KO</button>
         </div>
       </div>
     </header>
 
     <!-- Main 3-Column Enterprise Workbench -->
-    <div class="workbench-grid">
-      <!-- 2. Left Sidebar: Session History + Dynamic KB Ingest + Advanced Settings -->
+    <div id="workbenchGrid" class="workbench-grid">
+      <!-- 2. Left Sidebar: Slimmed Session Management & Checkpoint History Only -->
       <aside class="sidebar-left">
-        <!-- Module A: Multi-Turn Session & Checkpoint History -->
-        <section class="panel-box">
+        <section class="panel-box session-panel">
           <div class="panel-title-bar">
-            <h2 class="panel-title" data-i18n="left_session_title">会话与状态持久化</h2>
-            <span class="micro-badge">AsyncSqliteSaver</span>
+            <h2 class="panel-title" data-i18n="left_session_title">多轮会话与检查点历史</h2>
+            <span class="micro-badge">SQLite</span>
           </div>
           <div class="field">
-            <label for="sessionInput" data-i18n="label_session_id">Session ID (多轮检查点线程)</label>
+            <label for="sessionInput" data-i18n="label_session_id">Session ID (多轮线程)</label>
             <div class="session-inline">
-              <input id="sessionInput" type="text" placeholder="auto-generated if blank" />
-              <button id="newSessionBtn" class="secondary" type="button" data-i18n="btn_new_session">➕ 新建会话</button>
+              <input
+                id="sessionInput"
+                type="text"
+                data-i18n-placeholder="session_placeholder"
+                placeholder="留空将自动生成"
+              />
+              <button id="newSessionBtn" class="secondary" type="button" data-i18n="btn_new_session">➕ 新建</button>
             </div>
           </div>
           <div class="panel-title-bar" style="margin-top: 2px;">
-            <span style="font-size: 0.72rem; color: var(--muted);" data-i18n="label_turn_history">多轮对话轨迹</span>
-            <button id="clearHistoryBtn" class="secondary" type="button" data-i18n="btn_clear_history">🗑️ 清空历史</button>
+            <span style="font-size: 0.71rem; color: var(--muted);" data-i18n="label_turn_history">本地多轮对话记录</span>
+            <button id="clearHistoryBtn" class="secondary" type="button" data-i18n="btn_clear_history">🗑️ 清空</button>
           </div>
           <div id="sessionTimeline" class="session-timeline">
             <div class="placeholder" data-i18n="placeholder_timeline">暂无历史轮次。发送提问以追踪 SQLite 检查点连续性与语义缓存命中。</div>
           </div>
         </section>
-
-        <!-- Module B: Dynamic Knowledge Base Ingestion -->
-        <details id="ingestPanel" class="sidebar-accordion" open>
-          <summary>
-            <span data-i18n="left_ingest_title">动态知识库投喂 (Live Ingest)</span>
-            <span class="micro-badge" data-i18n="ingest_micro_copy">SHA-256 幂等去重 + 语义缓存自动失效</span>
-          </summary>
-          <div class="accordion-body">
-            <div class="field">
-              <label for="ingestSourceInput" data-i18n="label_ingest_source">文档标题 / 来源路径 (Source)</label>
-              <input id="ingestSourceInput" type="text" value="custom_notes.md" />
-            </div>
-            <div class="field">
-              <label for="ingestPipelineSelect" data-i18n="label_ingest_pipeline">切分流水线 (Chunking Pipeline)</label>
-              <select id="ingestPipelineSelect">
-                <option value="v3" selected>v3 (Semantic Markdown)</option>
-                <option value="v2">v2 (Semantic Markdown)</option>
-                <option value="v1">v1 (Fixed Window)</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="ingestContentInput" data-i18n="label_ingest_content">Markdown 正文内容</label>
-              <textarea
-                id="ingestContentInput"
-                placeholder="# Project-Hyperion-9921&#10;Paste Markdown documentation here to index live and invalidate stale cache..."
-              ></textarea>
-            </div>
-            <button id="ingestBtn" type="button" data-i18n="btn_ingest">⚡ 幂等投喂并刷新缓存</button>
-            <div id="ingestStatus" class="ingest-status"></div>
-          </div>
-        </details>
-
-        <!-- Module C: Bottom Collapsed Advanced Connection Settings -->
-        <details id="advancedSettingsPanel" class="sidebar-accordion">
-          <summary>
-            <span data-i18n="left_adv_title">⚙️ 高级连接参数 (Advanced)</span>
-            <span class="micro-badge">SSE / Top-K</span>
-          </summary>
-          <div class="accordion-body">
-            <div class="field">
-              <label for="endpointInput" data-i18n="label_endpoint">Endpoint URL</label>
-              <input id="endpointInput" type="text" value="http://localhost:8000/api/v1/chat" />
-            </div>
-            <div class="field">
-              <label for="pipelineSelect" data-i18n="label_pipeline_ver">Pipeline Version (单通道调试生效)</label>
-              <select id="pipelineSelect">
-                <option value="v3" selected>v3 (Agentic LangGraph)</option>
-                <option value="v2">v2 (Hybrid + Rerank)</option>
-                <option value="v1">v1 (Dense Only)</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="topKInput" data-i18n="label_topk">Retrieval Top-K</label>
-              <input id="topKInput" type="number" min="1" max="20" value="5" />
-            </div>
-            <label class="checkbox-field">
-              <input id="streamCheckbox" type="checkbox" checked />
-              <span data-i18n="label_stream_sse">启用双通道 SSE 流式传输 (Stream SSE)</span>
-            </label>
-          </div>
-        </details>
       </aside>
 
       <!-- 3. Center Main Canvas: Scrollable Display + Bottom-Docked Prompt Bar -->
@@ -1502,36 +1805,28 @@
             <div class="canvas-view-header">
               <div class="canvas-view-title">
                 <h2 data-i18n="arena_header_title">⚡ v1 / v2 / v3 三代 RAG 架构同屏竞技场</h2>
-                <span class="micro-badge" data-i18n="arena_click_hint">点击任意列卡片可在右侧透视其链路与证据切片</span>
+                <span class="micro-badge" data-i18n="arena_click_hint">点击任意列卡片可在右侧切换查看其状态机链路与 Citations 切片</span>
               </div>
               <span id="compareSummaryPill" class="status-pill">ready</span>
             </div>
 
-            <div id="compareGrid" class="compare-grid">
-              <!-- Initialized dynamically with v1, v2, v3 comparison cards -->
-            </div>
+            <div id="compareGrid" class="compare-grid"></div>
           </section>
 
           <!-- Single-Channel Playground View -->
           <section id="playgroundSection" class="playground-container">
             <div class="canvas-view-header">
               <div class="canvas-view-title">
-                <h2 data-i18n="playground_header_title">💬 单通道深度对话调试 (Single-Channel Playground)</h2>
+                <h2 data-i18n="playground_header_title">💬 单通道深度对话流 (Single-Channel Playground)</h2>
                 <span id="playgroundActivePipeBadge" class="pipeline-badge v3">v3 · Agentic LangGraph</span>
               </div>
             </div>
 
             <div class="playground-answer-card">
               <div id="tokenOutput" class="token-output md-render placeholder" data-i18n="placeholder_token_output">
-                等待提问... 点击下方「面试官一键架构自测胶囊」或输入自定义问题。
+                等待提问... 点击下方「面试官一键架构自测胶囊」或输入问题。
               </div>
-              <div id="playgroundTelemetryPills" class="telemetry-pills">
-                <span class="telemetry-pill ttft">⚡ TTFT: -- ms</span>
-                <span class="telemetry-pill miss">⚪ Cache: --</span>
-                <span class="telemetry-pill rewrite">🔄 Rewrites: 0</span>
-                <span class="telemetry-pill">🧠 Mode: --</span>
-                <span class="telemetry-pill">📌 Citations: 0</span>
-              </div>
+              <div id="playgroundTelemetryPills" class="telemetry-bar" style="display: none;"></div>
             </div>
 
             <details class="sidebar-accordion">
@@ -1547,11 +1842,11 @@
           </section>
         </div>
 
-        <!-- Bottom-Docked Prompt Bar with 4 Interviewer Quick-Start Pills -->
+        <!-- Bottom-Docked Prompt Bar with Single Mode-Driven Action Button -->
         <div class="prompt-dock">
           <div class="quick-pills-header">
             <span class="quick-pills-label" data-i18n="quick_pills_title">
-              🎯 面试官一键架构自测胶囊 (100% 命中内置架构知识库与引用角标)
+              🎯 面试官一键架构自测胶囊 (点击自动填入并触发实测对比)
             </span>
           </div>
           <div id="quickPromptsBar" class="quick-pills-row">
@@ -1562,14 +1857,21 @@
           </div>
 
           <div class="dock-input-row">
+            <div id="playgroundPipeWrapper" class="playground-pipe-inline">
+              <label for="playgroundPipeSelect" data-i18n="playground_pipe_label">通道</label>
+              <select id="playgroundPipeSelect">
+                <option value="v3" selected>v3 (Agentic)</option>
+                <option value="v2">v2 (Hybrid)</option>
+                <option value="v1">v1 (Naive)</option>
+              </select>
+            </div>
             <textarea
               id="queryInput"
               data-i18n-placeholder="query_placeholder"
               placeholder="输入针对 RAG 架构或知识库的问题... (Ctrl/Cmd + Enter 发送)"
             ></textarea>
             <div class="dock-actions">
-              <button id="sendBtn" type="button" data-i18n="btn_send">🚀 发送提问</button>
-              <button id="compareAllBtn" class="compare-btn" type="button" data-i18n="btn_compare_all">⚡ v1/v2/v3 同屏对比</button>
+              <button id="sendBtn" class="compare-btn" type="button">⚡ v1 / v2 / v3 同时对比</button>
             </div>
           </div>
           <div id="errorBanner" class="error-banner"></div>
@@ -1578,7 +1880,6 @@
 
       <!-- 4. Right Sidebar: Architecture Inspector & Evidence + Ragas Benchmark -->
       <aside class="sidebar-right">
-        <!-- Upper Half: LangGraph & Pipeline Live Execution Trace -->
         <div class="inspector-trace-box">
           <div class="panel-title-bar">
             <h2 class="panel-title" data-i18n="right_trace_title">LangGraph 状态机链路透视</h2>
@@ -1601,7 +1902,7 @@
             <div id="traceNode2" class="trace-node">
               <div>
                 <div class="trace-node-title">[2. Hybrid RRF + FP16 Rerank]</div>
-                <div id="traceSub2" class="trace-node-sub">Qdrant int8 + BM25 RRF + bge-reranker-v2-m3</div>
+                <div id="traceSub2" class="trace-node-sub" data-i18n="trace_n2_sub_v23">Qdrant int8 + BM25 RRF + FP16 Rerank</div>
               </div>
               <span id="traceBadge2" class="trace-node-badge">Idle</span>
             </div>
@@ -1609,7 +1910,7 @@
             <div id="traceNode3" class="trace-node">
               <div>
                 <div class="trace-node-title">[3. LangGraph Doc Grader]</div>
-                <div class="trace-node-sub" data-i18n="trace_n3_sub">v3 相关性评估节点</div>
+                <div class="trace-node-sub" data-i18n="trace_n3_sub">v3 文档相关性评估节点</div>
               </div>
               <span id="traceBadge3" class="trace-node-badge">Idle</span>
             </div>
@@ -1617,7 +1918,7 @@
             <div id="traceNode4" class="trace-node">
               <div>
                 <div class="trace-node-title">[4. Self-Correction Query Rewrite]</div>
-                <div class="trace-node-sub" data-i18n="trace_n4_sub">最大 2 次重写防死循环护栏</div>
+                <div class="trace-node-sub" data-i18n="trace_n4_sub">最多 2 次重写防死循环护栏</div>
               </div>
               <span id="traceBadge4" class="trace-node-badge">Idle</span>
             </div>
@@ -1625,14 +1926,13 @@
             <div id="traceNode5" class="trace-node">
               <div>
                 <div class="trace-node-title">[5. LLM Synthesis & Guardrail]</div>
-                <div id="traceSub5" class="trace-node-sub">is_cacheable_response 防降级缓存污染</div>
+                <div id="traceSub5" class="trace-node-sub" data-i18n="trace_n5_sub">is_cacheable_response 防降级缓存污染</div>
               </div>
               <span id="traceBadge5" class="trace-node-badge">Idle</span>
             </div>
           </div>
         </div>
 
-        <!-- Lower Half Tabs: Tab 1 (Evidence Inspector) & Tab 2 (Ragas Benchmark) -->
         <div class="inspector-tabs-bar" role="tablist">
           <button id="tabBtnEvidence" type="button" class="inspector-tab-btn active" data-i18n="tab_evidence">
             📌 证据切片检查器 (Citations)
@@ -1642,16 +1942,14 @@
           </button>
         </div>
 
-        <!-- Tab 1 Body: Citations Evidence Inspector -->
         <div id="tabPanelEvidence" class="inspector-tab-body">
           <div id="citationsList" class="citations-list">
             <div class="placeholder" data-i18n="placeholder_citations">
-              暂无引用切片。生成回答后点击正文中的 [1] 或 [doc-id] 胶囊角标可自动滚动定位并高亮对应证据卡片。
+              暂无引用切片。点击回答正文中的 [1] 或 [doc-id] 胶囊角标可平滑滚动定位并触发高亮呼吸边框。
             </div>
           </div>
         </div>
 
-        <!-- Tab 2 Body: Ragas v0.2+ Quantitative Benchmark Dashboard -->
         <div id="tabPanelRagas" class="inspector-tab-body" style="display: none;">
           <table class="ragas-table">
             <thead>
@@ -1711,228 +2009,508 @@
         </div>
       </aside>
     </div>
+
+    <!-- 5. Slide-Over Drawers for Low-Frequency Operations (Ingest & Settings) -->
+    <div id="drawerBackdrop" class="drawer-backdrop"></div>
+
+    <aside id="ingestDrawer" class="slide-drawer" aria-hidden="true" role="dialog" aria-labelledby="ingestDrawerTitle">
+      <div class="drawer-header">
+        <div class="drawer-header-titles">
+          <h3 id="ingestDrawerTitle" class="drawer-title" data-i18n="drawer_ingest_title">知识库入库 (Live Ingest)</h3>
+          <div class="drawer-subtitle" data-i18n="ingest_micro_copy">SHA-256 幂等去重 + 语义缓存自动失效</div>
+        </div>
+        <button id="closeIngestDrawerBtn" class="drawer-close-btn" type="button" data-i18n-title="btn_close_drawer" title="关闭">✕</button>
+      </div>
+      <div class="drawer-body">
+        <div class="field">
+          <label for="ingestSourceInput" data-i18n="label_ingest_source">文档标题 / 来源路径 (Source)</label>
+          <input id="ingestSourceInput" type="text" value="custom_notes.md" />
+        </div>
+        <div class="field">
+          <label for="ingestPipelineSelect" data-i18n="label_ingest_pipeline">切分流水线 (Chunking Pipeline)</label>
+          <select id="ingestPipelineSelect">
+            <option value="v3" selected>v3 (Semantic Markdown)</option>
+            <option value="v2">v2 (Semantic Markdown)</option>
+            <option value="v1">v1 (Fixed Window)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="ingestContentInput" data-i18n="label_ingest_content">Markdown 正文内容</label>
+          <textarea
+            id="ingestContentInput"
+            data-i18n-placeholder="ingest_content_placeholder"
+            placeholder="# Project-Hyperion-9921&#10;在此粘贴 Markdown 文档以实时建库并失效旧语义缓存..."
+          ></textarea>
+        </div>
+        <button id="ingestBtn" type="button" data-i18n="btn_ingest">⚡ 幂等投喂并刷新缓存</button>
+        <div id="ingestStatus" class="ingest-status"></div>
+      </div>
+    </aside>
+
+    <aside id="settingsDrawer" class="slide-drawer" aria-hidden="true" role="dialog" aria-labelledby="settingsDrawerTitle">
+      <div class="drawer-header">
+        <div class="drawer-header-titles">
+          <h3 id="settingsDrawerTitle" class="drawer-title" data-i18n="drawer_settings_title">高级连接设置 (Settings)</h3>
+          <div class="drawer-subtitle">SSE / Top-K / Pipeline</div>
+        </div>
+        <button id="closeSettingsDrawerBtn" class="drawer-close-btn" type="button" data-i18n-title="btn_close_drawer" title="关闭">✕</button>
+      </div>
+      <div class="drawer-body">
+        <div class="field">
+          <label for="endpointInput" data-i18n="label_endpoint">Endpoint URL</label>
+          <input id="endpointInput" type="text" value="http://localhost:8000/api/v1/chat" />
+        </div>
+        <div class="field">
+          <label for="pipelineSelect" data-i18n="label_pipeline_ver">Pipeline Version (单通道调试生效)</label>
+          <select id="pipelineSelect">
+            <option value="v3" selected>v3 (Agentic LangGraph)</option>
+            <option value="v2">v2 (Hybrid + Rerank)</option>
+            <option value="v1">v1 (Dense Only)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="topKInput" data-i18n="label_topk">Retrieval Top-K</label>
+          <input id="topKInput" type="number" min="1" max="20" value="5" />
+        </div>
+        <label class="checkbox-field">
+          <input id="streamCheckbox" type="checkbox" checked />
+          <span data-i18n="label_stream_sse">启用双通道 SSE 流式传输 (Stream SSE)</span>
+        </label>
+      </div>
+    </aside>
   </div>
 
   <script>
     /* ============================================================================
-     * 1. Trilingual i18n Dictionary (ZH / EN / KO) & 4 Quick-Start Prompt Pills
+     * 1. Trilingual i18n Dictionary (ZH / EN / KO) — Strict JSON-Compatible Block
      * ============================================================================ */
+    /* __I18N_DICT_START__ */
     const I18N_DICT = {
-      zh: {
-        brand_subtitle: "Agentic RAG Dual-Channel SSE Viewer · Hybrid RRF · FP16 Rerank · LangGraph 企业级工作台",
-        nav_arena: "⚡ v1 / v2 / v3 同屏竞技场 (Arena View)",
-        nav_playground: "💬 单通道调试 (Playground View)",
-        left_session_title: "多轮会话与检查点历史",
-        label_session_id: "Session ID (AsyncSqliteSaver 线程)",
-        btn_new_session: "➕ 新建会话",
-        label_turn_history: "本地多轮对话记录",
-        btn_clear_history: "🗑️ 清空历史",
-        placeholder_timeline: "暂无历史轮次。发送提问以追踪 SQLite 检查点连续性与语义缓存命中。",
-        left_ingest_title: "动态知识库投喂 (Live Ingest)",
-        ingest_micro_copy: "SHA-256 幂等去重 + 语义缓存自动失效",
-        label_ingest_source: "文档标题 / 来源路径 (Source)",
-        label_ingest_pipeline: "切分流水线 (Chunking Pipeline)",
-        label_ingest_content: "Markdown 正文内容",
-        btn_ingest: "⚡ 幂等投喂并刷新缓存",
-        left_adv_title: "⚙️ 高级连接参数 (Advanced)",
-        label_endpoint: "Endpoint URL",
-        label_pipeline_ver: "Pipeline Version (单通道模式联动)",
-        label_topk: "Retrieval Top-K",
-        label_stream_sse: "启用双通道 SSE 流式传输 (Stream SSE)",
-        arena_header_title: "⚡ v1 / v2 / v3 三代 RAG 架构同屏竞技场",
-        arena_click_hint: "点击任意列卡片可在右侧切换查看其状态机链路与 Citations 切片",
-        playground_header_title: "💬 单通道深度对话流 (Single-Channel Playground)",
-        placeholder_token_output: "等待提问... 点击下方「面试官一键架构自测胶囊」或输入问题。",
-        playground_raw_metrics_title: "原始遥测指标字典 (Raw Telemetry Payload)",
-        placeholder_metrics: "暂无遥测数据。",
-        quick_pills_title: "🎯 面试官一键架构自测胶囊 (点击自动填入并触发 v1/v2/v3 实测对比)",
-        query_placeholder: "输入针对 RAG 架构或知识库的问题... (Ctrl/Cmd + Enter 发送)",
-        btn_send: "🚀 发送提问",
-        btn_compare_all: "⚡ v1/v2/v3 同屏对比",
-        right_trace_title: "LangGraph 状态机链路透视",
-        trace_n1_sub: "Redis Cosine ≥ 0.92 + SingleFlight",
-        trace_n3_sub: "v3 文档相关性评估节点",
-        trace_n4_sub: "最多 2 次重写防死循环护栏",
-        tab_evidence: "📌 证据切片检查器 (Citations)",
-        tab_ragas: "📊 Ragas v0.2+ 量化基线",
-        placeholder_citations: "暂无引用切片。点击回答正文中的 [1] 或 [doc-id] 胶囊角标可平滑滚动定位并触发高亮呼吸边框。",
-        ragas_col_metric: "Ragas v0.2+ 指标",
-        sla_cache_label: "语义缓存命中 TTFT",
-        sla_vram_label: "RTX 3060 6GB 显存水位",
-        sla_p95_label: "高并发延迟 SLA 红线",
-        sla_guard_label: "降级回答防污染率",
-        arena_v1_desc: "Fixed Window · Qdrant Dense Only",
-        arena_v2_desc: "Semantic Chunk · int8 + BM25 RRF + FP16 Rerank",
-        arena_v3_desc: "LangGraph Self-Correction · Redis Cache · Guardrail",
-        arena_waiting: "点击下方「面试官一键架构自测胶囊」或输入问题，即刻同屏流式对比 v1 / v2 / v3 三代架构表现。",
-        quick_pills: [
+      "zh": {
+        "brand_subtitle": "Agentic RAG Dual-Channel SSE Viewer · Hybrid RRF · FP16 Rerank · LangGraph 企业级工作台",
+        "btn_toggle_sidebar": "折叠 / 展开左侧会话栏",
+        "nav_arena": "⚡ v1 / v2 / v3 同屏竞技场 (Arena View)",
+        "nav_playground": "💬 单通道调试 (Playground View)",
+        "btn_top_settings": "设置",
+        "badge_ingest_label": "知识库入库",
+        "badge_online": "在线",
+        "badge_offline": "离线",
+        "status_idle": "空闲",
+        "status_ready": "就绪",
+        "status_running": "运行中...",
+        "status_streaming": "流式生成中...",
+        "status_arena_running": "v1 / v2 / v3 并发运行中...",
+        "status_completed": "已完成",
+        "status_stopped": "已停止",
+        "status_error": "错误",
+        "left_session_title": "多轮会话与检查点历史",
+        "label_session_id": "Session ID (多轮线程)",
+        "session_placeholder": "留空将自动生成",
+        "btn_new_session": "➕ 新建",
+        "label_turn_history": "本地多轮对话记录",
+        "btn_clear_history": "🗑️ 清空",
+        "placeholder_timeline": "暂无历史轮次。发送提问以追踪 SQLite 检查点连续性与语义缓存命中。",
+        "drawer_ingest_title": "知识库入库 (Live Ingest)",
+        "ingest_micro_copy": "SHA-256 幂等去重 + 语义缓存自动失效",
+        "label_ingest_source": "文档标题 / 来源路径 (Source)",
+        "label_ingest_pipeline": "切分流水线 (Chunking Pipeline)",
+        "label_ingest_content": "Markdown 正文内容",
+        "ingest_content_placeholder": "# Project-Hyperion-9921\n在此粘贴 Markdown 文档以实时建库并失效旧语义缓存...",
+        "btn_ingest": "⚡ 幂等投喂并刷新缓存",
+        "ingest_err_empty": "错误：文档来源与正文均不能为空。",
+        "ingest_running": "正在切分入库并刷新混合索引...",
+        "drawer_settings_title": "高级连接设置 (Settings)",
+        "label_endpoint": "Endpoint URL",
+        "label_pipeline_ver": "Pipeline Version (单通道调试生效)",
+        "label_topk": "Retrieval Top-K",
+        "label_stream_sse": "启用双通道 SSE 流式传输 (Stream SSE)",
+        "btn_close_drawer": "关闭",
+        "arena_header_title": "⚡ v1 / v2 / v3 三代 RAG 架构同屏竞技场",
+        "arena_click_hint": "点击任意列卡片可在右侧切换查看其状态机链路与 Citations 切片",
+        "playground_header_title": "💬 单通道深度对话流 (Single-Channel Playground)",
+        "playground_pipe_label": "通道",
+        "placeholder_token_output": "等待提问... 点击下方「面试官一键架构自测胶囊」或输入问题。",
+        "playground_raw_metrics_title": "原始遥测指标字典 (Raw Telemetry Payload)",
+        "placeholder_metrics": "暂无遥测数据。",
+        "quick_pills_title": "🎯 面试官一键架构自测胶囊 (点击自动填入并触发实测对比)",
+        "query_placeholder": "输入针对 RAG 架构或知识库的问题... (Ctrl/Cmd + Enter 发送)",
+        "err_empty_query": "请先输入问题后再发送。",
+        "btn_send_arena": "⚡ v1 / v2 / v3 同时对比",
+        "btn_send_playground": "➤ 发送至 {ver}",
+        "btn_stop_gen": "■ 停止生成",
+        "right_trace_title": "LangGraph 状态机链路透视",
+        "trace_n1_sub": "Redis Cosine ≥ 0.92 + SingleFlight",
+        "trace_n2_sub_v1": "Dense Only (BM25 与 Rerank 已跳过)",
+        "trace_n2_sub_v23": "Qdrant int8 + BM25 RRF + FP16 Rerank",
+        "trace_n3_sub": "v3 文档相关性评估节点",
+        "trace_n4_sub": "最多 2 次重写防死循环护栏",
+        "trace_n5_sub": "is_cacheable_response 防降级缓存污染",
+        "trace_badge_idle": "Idle",
+        "trace_badge_skipped": "Skipped",
+        "trace_badge_skipped_v1": "Skipped (v1)",
+        "trace_badge_skipped_v2": "Skipped (v2)",
+        "trace_badge_skipped_hit": "Skipped (Cache Hit)",
+        "trace_badge_checking": "Checking...",
+        "trace_badge_dense_running": "Dense Search...",
+        "trace_badge_hybrid_running": "RRF + Rerank...",
+        "trace_badge_grading": "Grading...",
+        "trace_badge_monitoring": "Monitoring...",
+        "trace_badge_streaming": "Streaming SSE...",
+        "trace_badge_stopped": "Stopped",
+        "trace_badge_dense_done": "Dense Only",
+        "trace_badge_hybrid_done": "RRF + FP16 Rerank",
+        "trace_badge_miss": "Miss -> Proceed",
+        "trace_badge_relevant": "Relevant ✓",
+        "trace_badge_direct_pass": "0 Rewrites: Direct Pass",
+        "trace_badge_rewrites_fmt": "{n} 次重写闭环",
+        "tab_evidence": "📌 证据切片检查器 (Citations)",
+        "tab_ragas": "📊 Ragas v0.2+ 量化基线",
+        "placeholder_citations": "暂无引用切片。点击回答正文中的 [1] 或 [doc-id] 胶囊角标可平滑滚动定位并触发高亮呼吸边框。",
+        "ragas_col_metric": "Ragas v0.2+ 指标",
+        "sla_cache_label": "语义缓存命中 TTFT",
+        "sla_vram_label": "RTX 3060 6GB 显存水位",
+        "sla_p95_label": "高并发延迟 SLA 红线",
+        "sla_guard_label": "降级回答防污染率",
+        "arena_v1_desc": "Fixed Window · Qdrant Dense Only",
+        "arena_v2_desc": "Semantic Chunk · int8 + BM25 RRF + FP16 Rerank",
+        "arena_v3_desc": "LangGraph Self-Correction · Redis Cache · Guardrail",
+        "arena_v1_tags": [
+          "固定长度切分 (Fixed Chunk)",
+          "仅 Qdrant Dense 向量检索",
+          "单步快速生成 · 无重排 / 无缓存"
+        ],
+        "arena_v2_tags": [
+          "Semantic Markdown 语义切分",
+          "Dense + BM25 Hybrid RRF 融合",
+          "本地 FP16 bge-reranker-v2-m3 重排"
+        ],
+        "arena_v3_tags": [
+          "Redis 语义缓存 (Cosine ≥ 0.92)",
+          "LangGraph 相关性评分与自纠错重写",
+          "is_cacheable_response 防污染护栏"
+        ],
+        "arena_ready_hint": "等待提问 · 点击下方测试胶囊或输入自定义问题",
+        "arena_connecting": "正在建立流式连接...",
+        "arena_stopped_note": "已由用户停止生成",
+        "tele_connecting": "流式连接中...",
+        "tele_cache_hit": "Cache HIT",
+        "tele_cache_miss": "Cache MISS",
+        "tele_cache_pending": "Cache --",
+        "tele_rewrites": "Rewrites",
+        "tele_citations": "Citations",
+        "tele_stopped": "已停止",
+        "quick_pills": [
           {
-            label: "🔍 混合检索与 6GB 显存优化",
-            prompt: "本项目如何在 RTX 3060 6GB 显存限制下，结合 Qdrant int8 量化、BM25 稀疏检索、RRF 融合与本地 FP16 bge-reranker-v2-m3 实现高精度混合检索？"
+            "label": "🔍 混合检索与 6GB 显存优化",
+            "prompt": "本项目如何在 RTX 3060 6GB 显存限制下，结合 Qdrant int8 量化、BM25 稀疏检索、RRF 融合与本地 FP16 bge-reranker-v2-m3 实现高精度混合检索？"
           },
           {
-            label: "🔄 LangGraph 自纠错与防降级污染",
-            prompt: "v3 Agentic RAG 流水线如何通过 LangGraph 状态机实现文档相关性评分、最多 2 次查询重写（Query Rewrite），以及通过 is_cacheable_response 防止降级回答污染语义缓存？"
+            "label": "🔄 LangGraph 自纠错与防降级污染",
+            "prompt": "v3 Agentic RAG 流水线如何通过 LangGraph 状态机实现文档相关性评分、最多 2 次查询重写（Query Rewrite），以及通过 is_cacheable_response 防止降级回答污染语义缓存？"
           },
           {
-            label: "⚡ 语义缓存极速命中实测 (连点两次对比 TTFT)",
-            prompt: "请解释本项目的 Redis 语义缓存（Cosine >= 0.92）与 SingleFlight 并发防击穿机制，以及动态投喂文档后如何自动失效缓存？（提示：再次点击本胶囊可实测 ~20ms 缓存命中！）"
+            "label": "⚡ 语义缓存极速命中实测 (连点两次对比 TTFT)",
+            "prompt": "请解释本项目的 Redis 语义缓存（Cosine >= 0.92）与 SingleFlight 并发防击穿机制，以及动态投喂文档后如何自动失效缓存？（提示：再次点击本胶囊可实测 ~20ms 缓存命中！）"
           },
           {
-            label: "📊 v1 / v2 / v3 架构演进与 Ragas 量化基线",
-            prompt: "对比本项目 v1、v2、v3 三代 RAG 流水线的核心架构差异，以及它们在 Ragas 评测指标与高并发 P95 < 1800ms 延迟 SLA 下的表现。"
+            "label": "📊 v1 / v2 / v3 架构演进与 Ragas 量化基线",
+            "prompt": "对比本项目 v1、v2、v3 三代 RAG 流水线的核心架构差异，以及它们在 Ragas 评测指标与高并发 P95 < 1800ms 延迟 SLA 下的表现。"
           }
         ]
       },
-      en: {
-        brand_subtitle: "Agentic RAG Dual-Channel SSE Viewer · Hybrid RRF · FP16 Rerank · LangGraph Workbench",
-        nav_arena: "⚡ v1 / v2 / v3 Arena View",
-        nav_playground: "💬 Single-Channel Playground",
-        left_session_title: "Session & Checkpoint History",
-        label_session_id: "Session ID (AsyncSqliteSaver Thread)",
-        btn_new_session: "➕ New Session",
-        label_turn_history: "Multi-Turn History",
-        btn_clear_history: "🗑️ Clear",
-        placeholder_timeline: "No turns recorded yet. Send a query to trace SQLite checkpoint continuity and semantic cache hits.",
-        left_ingest_title: "Knowledge Base Ingestion",
-        ingest_micro_copy: "SHA-256 Idempotent Dedup + Auto Cache Invalidation",
-        label_ingest_source: "Document Title / Source",
-        label_ingest_pipeline: "Chunking Pipeline",
-        label_ingest_content: "Markdown Body Content",
-        btn_ingest: "⚡ Idempotent Ingest & Refresh Cache",
-        left_adv_title: "⚙️ Advanced Connection Settings",
-        label_endpoint: "Endpoint URL",
-        label_pipeline_ver: "Pipeline Version (Playground Mode)",
-        label_topk: "Retrieval Top-K",
-        label_stream_sse: "Enable Dual-Channel Stream SSE",
-        arena_header_title: "⚡ v1 / v2 / v3 Side-by-Side Architecture Arena",
-        arena_click_hint: "Click any column card to inspect its live state machine trace and citations on the right",
-        playground_header_title: "💬 Single-Channel Deep Debugging Playground",
-        placeholder_token_output: "Waiting for query... Click an Interviewer Quick-Start Pill below or type a custom question.",
-        playground_raw_metrics_title: "Raw Telemetry Payload",
-        placeholder_metrics: "No telemetry received yet.",
-        quick_pills_title: "🎯 Interviewer Quick-Start Architecture Pills (100% Built-in KB Hit & Telemetry Comparison)",
-        query_placeholder: "Ask a question against the Agentic RAG pipeline... (Ctrl/Cmd + Enter to send)",
-        btn_send: "🚀 Send Query",
-        btn_compare_all: "⚡ Compare v1/v2/v3",
-        right_trace_title: "Live Pipeline Execution Trace",
-        trace_n1_sub: "Redis Cosine ≥ 0.92 + SingleFlight",
-        trace_n3_sub: "v3 Relevance Grader Node",
-        trace_n4_sub: "Max 2 Rewrites Loop Guardrail",
-        tab_evidence: "📌 Evidence Inspector (Citations)",
-        tab_ragas: "📊 Ragas v0.2+ Benchmarks",
-        placeholder_citations: "No citations yet. Click any [1] or [doc-id] badge in the answer to smooth-scroll and pulse-highlight its evidence card.",
-        ragas_col_metric: "Ragas v0.2+ Metric",
-        sla_cache_label: "Semantic Cache Hit TTFT",
-        sla_vram_label: "RTX 3060 6GB VRAM Budget",
-        sla_p95_label: "High-Concurrency SLA",
-        sla_guard_label: "Fallback Cache Pollution",
-        arena_v1_desc: "Fixed Window · Qdrant Dense Only",
-        arena_v2_desc: "Semantic Chunk · int8 + BM25 RRF + FP16 Rerank",
-        arena_v3_desc: "LangGraph Self-Correction · Redis Cache · Guardrail",
-        arena_waiting: "Click an Interviewer Quick-Start Pill below or enter a prompt to stream v1, v2, and v3 side-by-side.",
-        quick_pills: [
+      "en": {
+        "brand_subtitle": "Agentic RAG Dual-Channel SSE Viewer · Hybrid RRF · FP16 Rerank · LangGraph Workbench",
+        "btn_toggle_sidebar": "Collapse / Expand Session Sidebar",
+        "nav_arena": "⚡ v1 / v2 / v3 Arena View",
+        "nav_playground": "💬 Single-Channel Playground",
+        "btn_top_settings": "Settings",
+        "badge_ingest_label": "Ingest",
+        "badge_online": "Online",
+        "badge_offline": "Offline",
+        "status_idle": "idle",
+        "status_ready": "ready",
+        "status_running": "running...",
+        "status_streaming": "streaming...",
+        "status_arena_running": "running v1 / v2 / v3...",
+        "status_completed": "completed",
+        "status_stopped": "stopped",
+        "status_error": "error",
+        "left_session_title": "Session & Checkpoint History",
+        "label_session_id": "Session ID (Thread)",
+        "session_placeholder": "auto-generated if blank",
+        "btn_new_session": "➕ New",
+        "label_turn_history": "Multi-Turn History",
+        "btn_clear_history": "🗑️ Clear",
+        "placeholder_timeline": "No turns recorded yet. Send a query to trace SQLite checkpoint continuity and semantic cache hits.",
+        "drawer_ingest_title": "Knowledge Base Ingest",
+        "ingest_micro_copy": "SHA-256 Idempotent Dedup + Auto Cache Invalidation",
+        "label_ingest_source": "Document Title / Source",
+        "label_ingest_pipeline": "Chunking Pipeline",
+        "label_ingest_content": "Markdown Body Content",
+        "ingest_content_placeholder": "# Project-Hyperion-9921\nPaste Markdown documentation here to index live and invalidate stale cache...",
+        "btn_ingest": "⚡ Idempotent Ingest & Refresh Cache",
+        "ingest_err_empty": "Error: source and content must both be non-empty.",
+        "ingest_running": "Ingesting document and updating hybrid index...",
+        "drawer_settings_title": "Advanced Settings",
+        "label_endpoint": "Endpoint URL",
+        "label_pipeline_ver": "Pipeline Version (Playground Mode)",
+        "label_topk": "Retrieval Top-K",
+        "label_stream_sse": "Enable Dual-Channel Stream SSE",
+        "btn_close_drawer": "Close",
+        "arena_header_title": "⚡ v1 / v2 / v3 Side-by-Side Architecture Arena",
+        "arena_click_hint": "Click any column card to inspect its live state machine trace and citations on the right",
+        "playground_header_title": "💬 Single-Channel Deep Debugging Playground",
+        "playground_pipe_label": "Pipeline",
+        "placeholder_token_output": "Waiting for query... Click an Interviewer Quick-Start Pill below or type a custom question.",
+        "playground_raw_metrics_title": "Raw Telemetry Payload",
+        "placeholder_metrics": "No telemetry received yet.",
+        "quick_pills_title": "🎯 Interviewer Quick-Start Architecture Pills (100% Built-in KB Hit & Telemetry Comparison)",
+        "query_placeholder": "Ask a question against the Agentic RAG pipeline... (Ctrl/Cmd + Enter to send)",
+        "err_empty_query": "Please enter a query before sending.",
+        "btn_send_arena": "⚡ Compare v1 / v2 / v3",
+        "btn_send_playground": "➤ Send to {ver}",
+        "btn_stop_gen": "■ Stop Generating",
+        "right_trace_title": "Live Pipeline Execution Trace",
+        "trace_n1_sub": "Redis Cosine ≥ 0.92 + SingleFlight",
+        "trace_n2_sub_v1": "Dense Only (BM25 & Rerank Skipped)",
+        "trace_n2_sub_v23": "Qdrant int8 + BM25 RRF + FP16 Rerank",
+        "trace_n3_sub": "v3 Relevance Grader Node",
+        "trace_n4_sub": "Max 2 Rewrites Loop Guardrail",
+        "trace_n5_sub": "is_cacheable_response Anti-Pollution Guard",
+        "trace_badge_idle": "Idle",
+        "trace_badge_skipped": "Skipped",
+        "trace_badge_skipped_v1": "Skipped (v1)",
+        "trace_badge_skipped_v2": "Skipped (v2)",
+        "trace_badge_skipped_hit": "Skipped (Cache Hit)",
+        "trace_badge_checking": "Checking...",
+        "trace_badge_dense_running": "Dense Search...",
+        "trace_badge_hybrid_running": "RRF + Rerank...",
+        "trace_badge_grading": "Grading...",
+        "trace_badge_monitoring": "Monitoring...",
+        "trace_badge_streaming": "Streaming SSE...",
+        "trace_badge_stopped": "Stopped",
+        "trace_badge_dense_done": "Dense Only",
+        "trace_badge_hybrid_done": "RRF + FP16 Rerank",
+        "trace_badge_miss": "Miss -> Proceed",
+        "trace_badge_relevant": "Relevant ✓",
+        "trace_badge_direct_pass": "0 Rewrites: Direct Pass",
+        "trace_badge_rewrites_fmt": "{n} Rewrites: Loop",
+        "tab_evidence": "📌 Evidence Inspector (Citations)",
+        "tab_ragas": "📊 Ragas v0.2+ Benchmarks",
+        "placeholder_citations": "No citations yet. Click any [1] or [doc-id] badge in the answer to smooth-scroll and pulse-highlight its evidence card.",
+        "ragas_col_metric": "Ragas v0.2+ Metric",
+        "sla_cache_label": "Semantic Cache Hit TTFT",
+        "sla_vram_label": "RTX 3060 6GB VRAM Budget",
+        "sla_p95_label": "High-Concurrency SLA",
+        "sla_guard_label": "Fallback Cache Pollution",
+        "arena_v1_desc": "Fixed Window · Qdrant Dense Only",
+        "arena_v2_desc": "Semantic Chunk · int8 + BM25 RRF + FP16 Rerank",
+        "arena_v3_desc": "LangGraph Self-Correction · Redis Cache · Guardrail",
+        "arena_v1_tags": [
+          "Fixed Window Chunking",
+          "Qdrant Dense Vector Only",
+          "Single-Step Fast LLM · No Rerank / Cache"
+        ],
+        "arena_v2_tags": [
+          "Semantic Markdown Chunking",
+          "Dense + BM25 Hybrid RRF Fusion",
+          "Local FP16 bge-reranker-v2-m3"
+        ],
+        "arena_v3_tags": [
+          "Redis Semantic Cache (Cosine ≥ 0.92)",
+          "LangGraph Doc Grader & Query Rewrite",
+          "is_cacheable_response Guardrail"
+        ],
+        "arena_ready_hint": "Ready · Click a pill below or enter a custom prompt",
+        "arena_connecting": "Connecting SSE stream...",
+        "arena_stopped_note": "Generation stopped by user",
+        "tele_connecting": "Connecting...",
+        "tele_cache_hit": "Cache HIT",
+        "tele_cache_miss": "Cache MISS",
+        "tele_cache_pending": "Cache --",
+        "tele_rewrites": "Rewrites",
+        "tele_citations": "Citations",
+        "tele_stopped": "Stopped",
+        "quick_pills": [
           {
-            label: "🔍 Hybrid RRF & 6GB VRAM Optimization",
-            prompt: "How does this project combine Qdrant int8 quantization, BM25 sparse retrieval, RRF fusion, and local FP16 bge-reranker-v2-m3 to achieve high-precision hybrid retrieval under an RTX 3060 6GB VRAM constraint?"
+            "label": "🔍 Hybrid RRF & 6GB VRAM Optimization",
+            "prompt": "How does this project combine Qdrant int8 quantization, BM25 sparse retrieval, RRF fusion, and local FP16 bge-reranker-v2-m3 to achieve high-precision hybrid retrieval under an RTX 3060 6GB VRAM constraint?"
           },
           {
-            label: "🔄 LangGraph Self-Correction & Cache Guard",
-            prompt: "How does the v3 Agentic RAG pipeline use the LangGraph state machine for document grading, up to 2 query rewrites, and is_cacheable_response guardrails to prevent fallback responses from polluting the semantic cache?"
+            "label": "🔄 LangGraph Self-Correction & Cache Guard",
+            "prompt": "How does the v3 Agentic RAG pipeline use the LangGraph state machine for document grading, up to 2 query rewrites, and is_cacheable_response guardrails to prevent fallback responses from polluting the semantic cache?"
           },
           {
-            label: "⚡ Semantic Cache ~20ms Hit Test (Click Twice)",
-            prompt: "Explain the Redis semantic cache (Cosine >= 0.92), SingleFlight concurrency lock, and automatic cache invalidation upon document ingestion in this project. (Tip: Click this pill twice to benchmark ~20ms cache hit TTFT!)"
+            "label": "⚡ Semantic Cache ~20ms Hit Test (Click Twice)",
+            "prompt": "Explain the Redis semantic cache (Cosine >= 0.92), SingleFlight concurrency lock, and automatic cache invalidation upon document ingestion in this project. (Tip: Click this pill twice to benchmark ~20ms cache hit TTFT!)"
           },
           {
-            label: "📊 v1 / v2 / v3 Evolution & Ragas Benchmarks",
-            prompt: "Compare the core architectural differences across the v1, v2, and v3 RAG pipelines in this project, along with their quantitative performance in Ragas metrics and P95 < 1800ms latency SLA."
+            "label": "📊 v1 / v2 / v3 Evolution & Ragas Benchmarks",
+            "prompt": "Compare the core architectural differences across the v1, v2, and v3 RAG pipelines in this project, along with their quantitative performance in Ragas metrics and P95 < 1800ms latency SLA."
           }
         ]
       },
-      ko: {
-        brand_subtitle: "Agentic RAG Dual-Channel SSE Viewer · Hybrid RRF · FP16 Rerank · LangGraph 엔터프라이즈 워크벤치",
-        nav_arena: "⚡ v1 / v2 / v3 동시 비교 (Arena View)",
-        nav_playground: "💬 단일 채널 디버깅 (Playground View)",
-        left_session_title: "세션 및 체크포인트 기록",
-        label_session_id: "Session ID (AsyncSqliteSaver 스레드)",
-        btn_new_session: "➕ 새 세션",
-        label_turn_history: "멀티턴 대화 기록",
-        btn_clear_history: "🗑️ 기록 삭제",
-        placeholder_timeline: "기록된 대화 턴이 없습니다. 질문을 전송하여 SQLite 체크포인트 연속성과 시맨틱 캐시 적중을 추적하세요.",
-        left_ingest_title: "실시간 지식베이스 수집 (Ingest)",
-        ingest_micro_copy: "SHA-256 멱등성 중복 제거 + 시맨틱 캐시 자동 무효화",
-        label_ingest_source: "문서 제목 / 소스 경로 (Source)",
-        label_ingest_pipeline: "청킹 파이프라인 (Chunking Pipeline)",
-        label_ingest_content: "Markdown 본문 내용",
-        btn_ingest: "⚡ 멱등성 수집 및 캐시 새로고침",
-        left_adv_title: "⚙️ 고급 연결 설정 (Advanced)",
-        label_endpoint: "Endpoint URL",
-        label_pipeline_ver: "Pipeline Version (단일 채널 모드)",
-        label_topk: "Retrieval Top-K",
-        label_stream_sse: "듀얼 채널 Stream SSE 활성화",
-        arena_header_title: "⚡ v1 / v2 / v3 3세대 RAG 아키텍처 동시 비교 아레나",
-        arena_click_hint: "열 카드를 클릭하면 오른쪽에서 상태 머신 추적 및 근거 청크를 확인할 수 있습니다",
-        playground_header_title: "💬 단일 채널 심층 디버깅 (Single-Channel Playground)",
-        placeholder_token_output: "질문 대기 중... 아래의 면접관 원클릭 테스트 캡슐을 클릭하거나 질문을 입력하세요.",
-        playground_raw_metrics_title: "원시 원격 측정 지표 (Raw Telemetry Payload)",
-        placeholder_metrics: "수신된 원격 측정 데이터가 없습니다.",
-        quick_pills_title: "🎯 면접관 원클릭 아키텍처 테스트 캡슐 (내장 지식베이스 100% 적중 및 지표 비교)",
-        query_placeholder: "RAG 파이프라인에 질문을 입력하세요... (Ctrl/Cmd + Enter 전송)",
-        btn_send: "🚀 질문 전송",
-        btn_compare_all: "⚡ v1/v2/v3 동시 비교",
-        right_trace_title: "LangGraph 파이프라인 실행 추적",
-        trace_n1_sub: "Redis Cosine ≥ 0.92 + SingleFlight",
-        trace_n3_sub: "v3 문서 관련성 평가 노드",
-        trace_n4_sub: "최대 2회 쿼리 재작성 루프 가드레일",
-        tab_evidence: "📌 근거 청크 검사기 (Citations)",
-        tab_ragas: "📊 Ragas v0.2+ 벤치마크",
-        placeholder_citations: "수신된 인용 청크가 없습니다. 답변 본문의 [1] 또는 [doc-id] 배지를 클릭하면 해당 근거 카드로 스크롤되어 강조됩니다.",
-        ragas_col_metric: "Ragas v0.2+ 지표",
-        sla_cache_label: "시맨틱 캐시 적중 TTFT",
-        sla_vram_label: "RTX 3060 6GB VRAM 사용량",
-        sla_p95_label: "고동시성 지연 시간 SLA",
-        sla_guard_label: "폴백 응답 캐시 오염 방지",
-        arena_v1_desc: "Fixed Window · Qdrant Dense Only",
-        arena_v2_desc: "Semantic Chunk · int8 + BM25 RRF + FP16 Rerank",
-        arena_v3_desc: "LangGraph Self-Correction · Redis Cache · Guardrail",
-        arena_waiting: "아래의 면접관 원클릭 테스트 캡슐을 클릭하거나 질문을 입력하여 v1 / v2 / v3 파이프라인을 동시에 비교해 보세요.",
-        quick_pills: [
+      "ko": {
+        "brand_subtitle": "Agentic RAG Dual-Channel SSE Viewer · Hybrid RRF · FP16 Rerank · LangGraph 엔터프라이즈 워크벤치",
+        "btn_toggle_sidebar": "왼쪽 세션 사이드바 접기 / 펼치기",
+        "nav_arena": "⚡ v1 / v2 / v3 동시 비교 (Arena View)",
+        "nav_playground": "💬 단일 채널 디버깅 (Playground View)",
+        "btn_top_settings": "설정",
+        "badge_ingest_label": "지식 수집",
+        "badge_online": "온라인",
+        "badge_offline": "오프라인",
+        "status_idle": "대기",
+        "status_ready": "준비",
+        "status_running": "실행 중...",
+        "status_streaming": "스트리밍 중...",
+        "status_arena_running": "v1 / v2 / v3 동시 실행 중...",
+        "status_completed": "완료",
+        "status_stopped": "중지됨",
+        "status_error": "오류",
+        "left_session_title": "세션 및 체크포인트 기록",
+        "label_session_id": "Session ID (스레드)",
+        "session_placeholder": "비워 두면 자동 생성",
+        "btn_new_session": "➕ 새 세션",
+        "label_turn_history": "멀티턴 대화 기록",
+        "btn_clear_history": "🗑️ 삭제",
+        "placeholder_timeline": "기록된 대화 턴이 없습니다. 질문을 전송하여 SQLite 체크포인트 연속성과 시맨틱 캐시 적중을 추적하세요.",
+        "drawer_ingest_title": "실시간 지식베이스 수집 (Ingest)",
+        "ingest_micro_copy": "SHA-256 멱등성 중복 제거 + 시맨틱 캐시 자동 무효화",
+        "label_ingest_source": "문서 제목 / 소스 경로 (Source)",
+        "label_ingest_pipeline": "청킹 파이프라인 (Chunking Pipeline)",
+        "label_ingest_content": "Markdown 본문 내용",
+        "ingest_content_placeholder": "# Project-Hyperion-9921\n실시간 인덱싱 및 캐시 무효화를 위해 Markdown 문서를 붙여넣으세요...",
+        "btn_ingest": "⚡ 멱등성 수집 및 캐시 새로고침",
+        "ingest_err_empty": "오류: 문서 소스와 본문 내용을 모두 입력해 주세요.",
+        "ingest_running": "문서 수집 및 하이브리드 인덱스 업데이트 중...",
+        "drawer_settings_title": "고급 연결 설정 (Settings)",
+        "label_endpoint": "Endpoint URL",
+        "label_pipeline_ver": "Pipeline Version (단일 채널 모드)",
+        "label_topk": "Retrieval Top-K",
+        "label_stream_sse": "듀얼 채널 Stream SSE 활성화",
+        "btn_close_drawer": "닫기",
+        "arena_header_title": "⚡ v1 / v2 / v3 3세대 RAG 아키텍처 동시 비교 아레나",
+        "arena_click_hint": "열 카드를 클릭하면 오른쪽에서 상태 머신 추적 및 근거 청크를 확인할 수 있습니다",
+        "playground_header_title": "💬 단일 채널 심층 디버깅 (Single-Channel Playground)",
+        "playground_pipe_label": "채널",
+        "placeholder_token_output": "질문 대기 중... 아래의 면접관 원클릭 테스트 캡슐을 클릭하거나 질문을 입력하세요.",
+        "playground_raw_metrics_title": "원시 원격 측정 지표 (Raw Telemetry Payload)",
+        "placeholder_metrics": "수신된 원격 측정 데이터가 없습니다.",
+        "quick_pills_title": "🎯 면접관 원클릭 아키텍처 테스트 캡슐 (내장 지식베이스 100% 적중 및 지표 비교)",
+        "query_placeholder": "RAG 파이프라인에 질문을 입력하세요... (Ctrl/Cmd + Enter 전송)",
+        "err_empty_query": "전송하기 전에 질문을 입력해 주세요.",
+        "btn_send_arena": "⚡ v1 / v2 / v3 동시 비교",
+        "btn_send_playground": "➤ {ver}로 전송",
+        "btn_stop_gen": "■ 생성 중지",
+        "right_trace_title": "LangGraph 파이프라인 실행 추적",
+        "trace_n1_sub": "Redis Cosine ≥ 0.92 + SingleFlight",
+        "trace_n2_sub_v1": "Dense Only (BM25 및 Rerank 생략)",
+        "trace_n2_sub_v23": "Qdrant int8 + BM25 RRF + FP16 Rerank",
+        "trace_n3_sub": "v3 문서 관련성 평가 노드",
+        "trace_n4_sub": "최대 2회 쿼리 재작성 루프 가드레일",
+        "trace_n5_sub": "is_cacheable_response 폴백 캐시 오염 방지",
+        "trace_badge_idle": "Idle",
+        "trace_badge_skipped": "Skipped",
+        "trace_badge_skipped_v1": "Skipped (v1)",
+        "trace_badge_skipped_v2": "Skipped (v2)",
+        "trace_badge_skipped_hit": "Skipped (Cache Hit)",
+        "trace_badge_checking": "Checking...",
+        "trace_badge_dense_running": "Dense Search...",
+        "trace_badge_hybrid_running": "RRF + Rerank...",
+        "trace_badge_grading": "Grading...",
+        "trace_badge_monitoring": "Monitoring...",
+        "trace_badge_streaming": "Streaming SSE...",
+        "trace_badge_stopped": "Stopped",
+        "trace_badge_dense_done": "Dense Only",
+        "trace_badge_hybrid_done": "RRF + FP16 Rerank",
+        "trace_badge_miss": "Miss -> Proceed",
+        "trace_badge_relevant": "Relevant ✓",
+        "trace_badge_direct_pass": "0 Rewrites: Direct Pass",
+        "trace_badge_rewrites_fmt": "{n}회 재작성 루프",
+        "tab_evidence": "📌 근거 청크 검사기 (Citations)",
+        "tab_ragas": "📊 Ragas v0.2+ 벤치마크",
+        "placeholder_citations": "수신된 인용 청크가 없습니다. 답변 본문의 [1] 또는 [doc-id] 배지를 클릭하면 해당 근거 카드로 스크롤되어 강조됩니다.",
+        "ragas_col_metric": "Ragas v0.2+ 지표",
+        "sla_cache_label": "시맨틱 캐시 적중 TTFT",
+        "sla_vram_label": "RTX 3060 6GB VRAM 사용량",
+        "sla_p95_label": "고동시성 지연 시간 SLA",
+        "sla_guard_label": "폴백 응답 캐시 오염 방지",
+        "arena_v1_desc": "Fixed Window · Qdrant Dense Only",
+        "arena_v2_desc": "Semantic Chunk · int8 + BM25 RRF + FP16 Rerank",
+        "arena_v3_desc": "LangGraph Self-Correction · Redis Cache · Guardrail",
+        "arena_v1_tags": [
+          "고정 길이 청킹 (Fixed Chunk)",
+          "Qdrant Dense 벡터 단일 검색",
+          "단일 단계 빠른 생성 · 리랭크/캐시 없음"
+        ],
+        "arena_v2_tags": [
+          "시맨틱 Markdown 청킹",
+          "Dense + BM25 하이브리드 RRF 융합",
+          "로컬 FP16 bge-reranker-v2-m3 리랭킹"
+        ],
+        "arena_v3_tags": [
+          "Redis 시맨틱 캐시 (Cosine ≥ 0.92)",
+          "LangGraph 관련성 평가 및 쿼리 재작성",
+          "is_cacheable_response 오염 방지 가드레일"
+        ],
+        "arena_ready_hint": "대기 중 · 아래 캡슐을 클릭하거나 질문을 입력하세요",
+        "arena_connecting": "SSE 스트림 연결 중...",
+        "arena_stopped_note": "사용자에 의해 생성이 중지되었습니다",
+        "tele_connecting": "연결 중...",
+        "tele_cache_hit": "Cache HIT",
+        "tele_cache_miss": "Cache MISS",
+        "tele_cache_pending": "Cache --",
+        "tele_rewrites": "Rewrites",
+        "tele_citations": "Citations",
+        "tele_stopped": "중지됨",
+        "quick_pills": [
           {
-            label: "🔍 하이브리드 검색 및 6GB VRAM 최적화",
-            prompt: "이 프로젝트는 RTX 3060 6GB VRAM 제한 환경에서 Qdrant int8 양자화, BM25 희소 검색, RRF 융합 및 로컬 FP16 bge-reranker-v2-m3를 결합하여 어떻게 고정밀 하이브리드 검색을 구현합니까?"
+            "label": "🔍 하이브리드 검색 및 6GB VRAM 최적화",
+            "prompt": "이 프로젝트는 RTX 3060 6GB VRAM 제한 환경에서 Qdrant int8 양자화, BM25 희소 검색, RRF 융합 및 로컬 FP16 bge-reranker-v2-m3를 결합하여 어떻게 고정밀 하이브리드 검색을 구현합니까?"
           },
           {
-            label: "🔄 LangGraph 자가 수정 및 캐시 오염 방지",
-            prompt: "v3 Agentic RAG 파이프라인은 LangGraph 상태 머신을 통해 문서 관련성 평가, 최대 2회 쿼리 재작성(Query Rewrite), 그리고 is_cacheable_response 가드레일을 통한 폴백 응답의 시맨틱 캐시 오염 방지를 어떻게 구현합니까?"
+            "label": "🔄 LangGraph 자가 수정 및 캐시 오염 방지",
+            "prompt": "v3 Agentic RAG 파이프라인은 LangGraph 상태 머신을 통해 문서 관련성 평가, 최대 2회 쿼리 재작성(Query Rewrite), 그리고 is_cacheable_response 가드레일을 통한 폴백 응답의 시맨틱 캐시 오염 방지를 어떻게 구현합니까?"
           },
           {
-            label: "⚡ 시맨틱 캐시 ~20ms 적중 테스트 (2회 연속 클릭)",
-            prompt: "이 프로젝트의 Redis 시맨틱 캐시(Cosine >= 0.92), SingleFlight 동시성 잠금, 그리고 문서 수집 시 자동 캐시 무효화 메커니즘을 설명해 주세요. (팁: 이 버튼을 두 번 연속 클릭하여 ~20ms 캐시 적중 TTFT를 확인해 보세요!)"
+            "label": "⚡ 시맨틱 캐시 ~20ms 적중 테스트 (2회 연속 클릭)",
+            "prompt": "이 프로젝트의 Redis 시맨틱 캐시(Cosine >= 0.92), SingleFlight 동시성 잠금, 그리고 문서 수집 시 자동 캐시 무효화 메커니즘을 설명해 주세요. (팁: 이 버튼을 두 번 연속 클릭하여 ~20ms 캐시 적중 TTFT를 확인해 보세요!)"
           },
           {
-            label: "📊 v1 / v2 / v3 아키텍처 진화 및 Ragas 벤치마크",
-            prompt: "이 프로젝트의 v1, v2, v3 3세대 RAG 파이프라인 간 핵심 아키텍처 차이점과 Ragas 평가 지표 및 고동시성 P95 < 1800ms 지연 시간 SLA 성능을 비교해 주세요."
+            "label": "📊 v1 / v2 / v3 아키텍처 진화 및 Ragas 벤치마크",
+            "prompt": "이 프로젝트의 v1, v2, v3 3세대 RAG 파이프라인 간 핵심 아키텍처 차이점과 Ragas 평가 지표 및 고동시성 P95 < 1800ms 지연 시간 SLA 성능을 비교해 주세요."
           }
         ]
       }
     };
+    /* __I18N_DICT_END__ */
 
     /* ============================================================================
      * 2. DOM References & Global Workbench State
      * ============================================================================ */
+    const workbenchGrid = document.getElementById("workbenchGrid");
+    const toggleLeftSidebarBtn = document.getElementById("toggleLeftSidebarBtn");
     const endpointInput = document.getElementById("endpointInput");
     const sessionInput = document.getElementById("sessionInput");
     const newSessionBtn = document.getElementById("newSessionBtn");
     const clearHistoryBtn = document.getElementById("clearHistoryBtn");
     const pipelineSelect = document.getElementById("pipelineSelect");
+    const playgroundPipeWrapper = document.getElementById("playgroundPipeWrapper");
+    const playgroundPipeSelect = document.getElementById("playgroundPipeSelect");
     const topKInput = document.getElementById("topKInput");
     const streamCheckbox = document.getElementById("streamCheckbox");
     const queryInput = document.getElementById("queryInput");
     const sendBtn = document.getElementById("sendBtn");
-    const compareAllBtn = document.getElementById("compareAllBtn");
     const statusPill = document.getElementById("statusPill");
     const storeChunksBadge = document.getElementById("storeChunksBadge");
+    const storeChunksText = document.getElementById("storeChunksText");
+    const openSettingsDrawerBtn = document.getElementById("openSettingsDrawerBtn");
+    const drawerBackdrop = document.getElementById("drawerBackdrop");
+    const ingestDrawer = document.getElementById("ingestDrawer");
+    const settingsDrawer = document.getElementById("settingsDrawer");
+    const closeIngestDrawerBtn = document.getElementById("closeIngestDrawerBtn");
+    const closeSettingsDrawerBtn = document.getElementById("closeSettingsDrawerBtn");
+
     const errorBanner = document.getElementById("errorBanner");
     const tokenOutput = document.getElementById("tokenOutput");
     const playgroundTelemetryPills = document.getElementById("playgroundTelemetryPills");
@@ -1972,10 +2550,16 @@
       currentLang = "zh";
     }
 
-    // Default First-Screen Mode: Arena View
     let activeViewMode = "arena"; // "arena" | "playground"
     let inspectedPipeline = "v3"; // "v1" | "v2" | "v3"
     let activePromptPillIndex = null;
+    let isGenerating = false;
+    let activeAbortController = null;
+    let currentStatusKey = "status_idle";
+    let currentStatusKind = "";
+    let currentCompareStatusKey = "status_ready";
+    let currentCompareStatusKind = "";
+    let lastStoreStats = null;
 
     const sessionTurns = [];
     const pipelineSnapshots = {
@@ -2001,13 +2585,49 @@
       return "http://localhost:8000/api/v1";
     }
 
-    function setStatus(text, kind = "") {
-      statusPill.textContent = text;
+    function setStatus(statusKey, kind = "") {
+      currentStatusKey = statusKey;
+      currentStatusKind = kind;
+      statusPill.textContent = t(statusKey);
       statusPill.className = kind ? `status-pill ${kind}` : "status-pill";
     }
 
+    function setCompareSummaryStatus(statusKey, kind = "") {
+      currentCompareStatusKey = statusKey;
+      currentCompareStatusKind = kind;
+      compareSummaryPill.textContent = t(statusKey);
+      compareSummaryPill.className = kind ? `status-pill ${kind}` : "status-pill";
+    }
+
+    function isAbortError(err) {
+      return Boolean(err && (err.name === "AbortError" || err.code === 20));
+    }
+
     /* ============================================================================
-     * 3. Pure Safe Markdown & Interactive .cite-badge Rendering Engine
+     * 3. Slide-Over Drawers & Left Sidebar Collapse
+     * ============================================================================ */
+    function closeAllDrawers() {
+      drawerBackdrop.classList.remove("open");
+      [ingestDrawer, settingsDrawer].forEach((drawer) => {
+        drawer.classList.remove("open");
+        drawer.setAttribute("aria-hidden", "true");
+      });
+    }
+
+    function openDrawer(targetDrawer) {
+      closeAllDrawers();
+      drawerBackdrop.classList.add("open");
+      targetDrawer.classList.add("open");
+      targetDrawer.setAttribute("aria-hidden", "false");
+    }
+
+    function toggleLeftSidebar() {
+      const collapsed = workbenchGrid.classList.toggle("left-collapsed");
+      toggleLeftSidebarBtn.setAttribute("aria-expanded", String(!collapsed));
+    }
+
+    /* ============================================================================
+     * 4. Pure Safe Markdown & Interactive .cite-badge Rendering Engine
      * ============================================================================ */
     function escapeHtml(raw) {
       return String(raw)
@@ -2224,35 +2844,52 @@
     }
 
     /* ============================================================================
-     * 4. Telemetry Pills & Right Sidebar Execution Trace / Evidence Inspector
+     * 5. Compact Telemetry Bar & Right Sidebar Execution Trace / Evidence Inspector
      * ============================================================================ */
-    function buildTelemetryPillsHtml(metrics, citationsCount) {
+    function buildCompactTelemetryHtml(metrics, citationsCount, lifecycle = "done") {
       const m = metrics && typeof metrics === "object" ? metrics : {};
       const hasMetrics = Object.keys(m).length > 0;
-      const ttftVal = m.ttft_ms !== undefined && m.ttft_ms !== null ? Number(m.ttft_ms).toFixed(1) : "--";
-      const isHit = Boolean(m.cache_hit);
-      const cacheClass = hasMetrics ? (isHit ? "hit" : "miss") : "miss";
-      const cacheLabel = !hasMetrics
-        ? "⚪ Cache: --"
-        : isHit
-        ? "🟢 Cache Hit"
-        : "⚪ Cache Miss";
-      const rewrites = m.rewrite_count ?? m.retry_count ?? 0;
-      const rawMode = String(m.generation_mode || m.route_tier || "--");
-      const modeShort = rawMode.includes("live")
-        ? "live"
-        : rawMode.includes("demo")
-        ? "demo"
-        : rawMode;
       const citCount = typeof citationsCount === "number" ? citationsCount : 0;
 
-      return (
-        `<span class="telemetry-pill ttft">⚡ TTFT: ${escapeHtml(ttftVal)} ms</span>` +
-        `<span class="telemetry-pill ${cacheClass}">${cacheLabel}</span>` +
-        `<span class="telemetry-pill rewrite">🔄 Rewrites: ${escapeHtml(rewrites)}</span>` +
-        `<span class="telemetry-pill">🧠 Mode: ${escapeHtml(modeShort)}</span>` +
-        `<span class="telemetry-pill">📌 Citations: ${escapeHtml(citCount)}</span>`
-      );
+      if (!hasMetrics && (lifecycle === "connecting" || lifecycle === "streaming")) {
+        return (
+          `<span class="tele-item tele-ttft">${escapeHtml(t("tele_connecting"))}</span>` +
+          `<span class="tele-sep">·</span>` +
+          `<span class="tele-item">${escapeHtml(citCount)} ${escapeHtml(t("tele_citations"))}</span>`
+        );
+      }
+
+      const ttftVal = m.ttft_ms !== undefined && m.ttft_ms !== null ? `${Number(m.ttft_ms).toFixed(1)}ms` : "--";
+      const isHit = Boolean(m.cache_hit);
+      const cacheText = !hasMetrics
+        ? t("tele_cache_pending")
+        : isHit
+        ? t("tele_cache_hit")
+        : t("tele_cache_miss");
+      const cacheClass = hasMetrics ? (isHit ? "tele-hit" : "tele-miss") : "tele-miss";
+      const rewrites = m.rewrite_count ?? m.retry_count ?? 0;
+
+      const parts = [
+        `<span class="tele-item tele-ttft">TTFT ${escapeHtml(ttftVal)}</span>`,
+        `<span class="tele-sep">·</span>`,
+        `<span class="tele-item ${cacheClass}">${escapeHtml(cacheText)}</span>`,
+        `<span class="tele-sep">·</span>`,
+        `<span class="tele-item tele-rewrite">${escapeHtml(t("tele_rewrites"))} ${escapeHtml(rewrites)}</span>`,
+        `<span class="tele-sep">·</span>`,
+        `<span class="tele-item">${escapeHtml(citCount)} ${escapeHtml(t("tele_citations"))}</span>`
+      ];
+
+      if (lifecycle === "stopped") {
+        parts.push(`<span class="tele-sep">·</span>`);
+        parts.push(`<span class="tele-item tele-stopped">${escapeHtml(t("tele_stopped"))}</span>`);
+      }
+
+      return parts.join("");
+    }
+
+    function setTraceNode(nodeEl, badgeEl, className, badgeText) {
+      nodeEl.className = className;
+      badgeEl.textContent = badgeText;
     }
 
     function updatePipelineTrace(version) {
@@ -2284,71 +2921,95 @@
       const sub2 = document.getElementById("traceSub2");
       const sub5 = document.getElementById("traceSub5");
 
-      sub2.textContent =
+      sub2.textContent = version === "v1" ? t("trace_n2_sub_v1") : t("trace_n2_sub_v23");
+
+      const skippedBadgeForVer =
         version === "v1"
-          ? "Dense Only (Fixed Window Chunking)"
-          : "Qdrant int8 + BM25 RRF + BAAI/bge-reranker-v2-m3";
+          ? t("trace_badge_skipped_v1")
+          : version === "v2"
+          ? t("trace_badge_skipped_v2")
+          : t("trace_badge_skipped");
+
+      function markLegacySkippedNodes() {
+        setTraceNode(n1, b1, "trace-node skipped", skippedBadgeForVer);
+        setTraceNode(n3, b3, "trace-node skipped", skippedBadgeForVer);
+        setTraceNode(n4, b4, "trace-node skipped", skippedBadgeForVer);
+      }
 
       if (lifecycle === "idle") {
-        [n1, n2, n3, n4, n5].forEach((n) => (n.className = "trace-node"));
-        [b1, b2, b3, b4, b5].forEach((b) => (b.textContent = "Idle"));
-        sub5.textContent = "is_cacheable_response 防降级缓存污染";
+        if (version === "v3") {
+          [n1, n2, n3, n4, n5].forEach((n, idx) =>
+            setTraceNode(n, [b1, b2, b3, b4, b5][idx], "trace-node", t("trace_badge_idle"))
+          );
+        } else {
+          markLegacySkippedNodes();
+          setTraceNode(n2, b2, "trace-node", t("trace_badge_idle"));
+          setTraceNode(n5, b5, "trace-node", t("trace_badge_idle"));
+        }
+        sub5.textContent = t("trace_n5_sub");
         return;
       }
 
       if (lifecycle === "connecting" || (lifecycle === "streaming" && !hasMetrics)) {
-        n1.className = "trace-node active";
-        b1.textContent = version === "v3" ? "Checking..." : "Bypassed";
-        n2.className = "trace-node active";
-        b2.textContent = version === "v1" ? "Dense Search..." : "RRF + Rerank...";
-        n3.className = version === "v3" ? "trace-node active" : "trace-node skipped";
-        b3.textContent = version === "v3" ? "Grading..." : "N/A (v1/v2)";
-        n4.className = version === "v3" ? "trace-node active" : "trace-node skipped";
-        b4.textContent = version === "v3" ? "Monitoring..." : "N/A (v1/v2)";
-        n5.className = "trace-node active";
-        b5.textContent = "Streaming SSE...";
+        if (version === "v3") {
+          setTraceNode(n1, b1, "trace-node active", t("trace_badge_checking"));
+          setTraceNode(n2, b2, "trace-node active", t("trace_badge_hybrid_running"));
+          setTraceNode(n3, b3, "trace-node active", t("trace_badge_grading"));
+          setTraceNode(n4, b4, "trace-node active", t("trace_badge_monitoring"));
+        } else {
+          markLegacySkippedNodes();
+          const n2Text = version === "v1" ? t("trace_badge_dense_running") : t("trace_badge_hybrid_running");
+          setTraceNode(n2, b2, "trace-node active", n2Text);
+        }
+        setTraceNode(n5, b5, "trace-node active", t("trace_badge_streaming"));
+        sub5.textContent = t("trace_n5_sub");
+        return;
+      }
+
+      if (lifecycle === "stopped" && !hasMetrics) {
+        if (version === "v3") {
+          [n1, n2, n3, n4, n5].forEach((n, idx) =>
+            setTraceNode(n, [b1, b2, b3, b4, b5][idx], "trace-node stopped", t("trace_badge_stopped"))
+          );
+        } else {
+          markLegacySkippedNodes();
+          setTraceNode(n2, b2, "trace-node stopped", t("trace_badge_stopped"));
+          setTraceNode(n5, b5, "trace-node stopped", t("trace_badge_stopped"));
+        }
+        sub5.textContent = t("trace_n5_sub");
         return;
       }
 
       // Metrics arrived or Done
-      if (isHit) {
-        n1.className = "trace-node fast-hit";
+      if (isHit && version === "v3") {
         const hitMs = m.ttft_ms !== undefined && m.ttft_ms !== null ? `${Number(m.ttft_ms).toFixed(1)}ms` : "~20ms";
-        b1.textContent = `⚡ Fast-Path (${hitMs})`;
-
-        n2.className = "trace-node skipped";
-        b2.textContent = "Skipped (Cache Hit)";
-
-        n3.className = "trace-node skipped";
-        b3.textContent = "Skipped (Cache Hit)";
-
-        n4.className = "trace-node skipped";
-        b4.textContent = "Skipped (Cache Hit)";
+        setTraceNode(n1, b1, "trace-node fast-hit", `⚡ Fast-Path (${hitMs})`);
+        setTraceNode(n2, b2, "trace-node skipped", t("trace_badge_skipped_hit"));
+        setTraceNode(n3, b3, "trace-node skipped", t("trace_badge_skipped_hit"));
+        setTraceNode(n4, b4, "trace-node skipped", t("trace_badge_skipped_hit"));
+      } else if (version === "v1" || version === "v2") {
+        markLegacySkippedNodes();
+        const n2DoneText = version === "v1" ? t("trace_badge_dense_done") : t("trace_badge_hybrid_done");
+        setTraceNode(n2, b2, "trace-node done", n2DoneText);
       } else {
-        n1.className = version === "v3" ? "trace-node done" : "trace-node skipped";
-        b1.textContent = version === "v3" ? "Miss -> Proceed" : "Disabled (v1/v2)";
-
-        n2.className = "trace-node done";
-        b2.textContent = version === "v1" ? "Dense Only" : "RRF + FP16 Rerank";
-
-        if (version === "v3") {
-          n3.className = "trace-node done";
-          b3.textContent = "Relevant ✓";
-
-          n4.className = rewrites > 0 ? "trace-node warn" : "trace-node done";
-          b4.textContent = rewrites > 0 ? `${rewrites} Rewrites: Loop` : "0 Rewrites: Direct Pass";
-        } else {
-          n3.className = "trace-node skipped";
-          b3.textContent = "Bypassed";
-          n4.className = "trace-node skipped";
-          b4.textContent = "Bypassed";
-        }
+        setTraceNode(n1, b1, "trace-node done", t("trace_badge_miss"));
+        setTraceNode(n2, b2, "trace-node done", t("trace_badge_hybrid_done"));
+        setTraceNode(n3, b3, "trace-node done", t("trace_badge_relevant"));
+        setTraceNode(
+          n4,
+          b4,
+          rewrites > 0 ? "trace-node warn" : "trace-node done",
+          rewrites > 0
+            ? t("trace_badge_rewrites_fmt").replace("{n}", String(rewrites))
+            : t("trace_badge_direct_pass")
+        );
       }
 
-      n5.className = isFallback ? "trace-node warn" : "trace-node done";
+      const n5Class =
+        lifecycle === "stopped" ? "trace-node stopped" : isFallback ? "trace-node warn" : "trace-node done";
       const modeStr = m.generation_mode ? String(m.generation_mode) : "live/demo";
       const ttftStr = m.ttft_ms !== undefined && m.ttft_ms !== null ? `${Number(m.ttft_ms).toFixed(1)}ms` : "--";
-      b5.textContent = `${modeStr} · ${ttftStr}`;
+      setTraceNode(n5, b5, n5Class, `${modeStr} · ${ttftStr}`);
       sub5.textContent = `mode=${modeStr} | ttft=${ttftStr} | is_cacheable=${isCacheable}`;
     }
 
@@ -2357,6 +3018,7 @@
       if (!Array.isArray(citations) || citations.length === 0) {
         const empty = document.createElement("div");
         empty.className = "placeholder";
+        empty.setAttribute("data-i18n", "placeholder_citations");
         empty.textContent = t("placeholder_citations");
         citationsList.appendChild(empty);
         return;
@@ -2402,6 +3064,7 @@
       if (!metrics || typeof metrics !== "object" || Object.keys(metrics).length === 0) {
         const empty = document.createElement("div");
         empty.className = "placeholder";
+        empty.setAttribute("data-i18n", "placeholder_metrics");
         empty.textContent = t("placeholder_metrics");
         metricsGrid.appendChild(empty);
         return;
@@ -2443,7 +3106,6 @@
         selectInspectedPipeline(sourcePipeline);
       }
 
-      // Switch Right Sidebar to Tab 1 (Evidence Inspector)
       tabBtnEvidence.classList.add("active");
       tabBtnRagas.classList.remove("active");
       tabPanelEvidence.style.display = "block";
@@ -2472,14 +3134,44 @@
 
       cards.forEach((c) => c.classList.remove("pulse-highlight"));
       targetCard.scrollIntoView({ behavior: "smooth", block: "center" });
-      // Trigger reflow to restart animation cleanly
       void targetCard.offsetWidth;
       targetCard.classList.add("pulse-highlight");
     }
 
     /* ============================================================================
-     * 5. Arena 3-Column Initialization & Rendering
+     * 6. Arena 3-Column Initialization & Empty-State Denoising (R3)
      * ============================================================================ */
+    function renderArenaEmptyContent(answerEl, version) {
+      answerEl.replaceChildren();
+      answerEl.classList.add("placeholder");
+
+      const wrap = document.createElement("div");
+      wrap.className = "arena-empty-state";
+
+      const tagsCol = document.createElement("div");
+      tagsCol.className = "arch-tags-col";
+      const tags = t(`arena_${version}_tags`);
+      if (Array.isArray(tags)) {
+        tags.forEach((label) => {
+          const item = document.createElement("div");
+          item.className = "arch-feature-tag";
+          const dot = document.createElement("span");
+          dot.className = "arch-feature-dot";
+          const txt = document.createElement("span");
+          txt.textContent = label;
+          item.append(dot, txt);
+          tagsCol.appendChild(item);
+        });
+      }
+
+      const hint = document.createElement("div");
+      hint.className = "arena-empty-hint";
+      hint.textContent = t("arena_ready_hint");
+
+      wrap.append(tagsCol, hint);
+      answerEl.appendChild(wrap);
+    }
+
     function initArenaGridSkeleton() {
       compareGrid.replaceChildren();
       const specs = [
@@ -2504,6 +3196,7 @@
       ];
 
       for (const spec of specs) {
+        const snap = pipelineSnapshots[spec.version];
         const card = document.createElement("div");
         card.id = `arena-card-${spec.version}`;
         card.setAttribute("data-pipeline", spec.version);
@@ -2536,22 +3229,39 @@
 
         const answerEl = document.createElement("div");
         answerEl.id = `arena-answer-${spec.version}`;
-        answerEl.className = "compare-answer md-render placeholder";
-        const existingAnswer = pipelineSnapshots[spec.version].answer;
-        if (existingAnswer) {
-          answerEl.classList.remove("placeholder");
-          answerEl.innerHTML = renderSafeMarkdown(existingAnswer);
-        } else {
-          answerEl.textContent = t("arena_waiting");
-        }
+        answerEl.className = "compare-answer md-render";
 
         const pillsEl = document.createElement("div");
         pillsEl.id = `arena-pills-${spec.version}`;
-        pillsEl.className = "telemetry-pills";
-        pillsEl.innerHTML = buildTelemetryPillsHtml(
-          pipelineSnapshots[spec.version].metrics,
-          (pipelineSnapshots[spec.version].citations || []).length
-        );
+        pillsEl.className = "telemetry-bar";
+
+        const hasMetrics = snap.metrics && Object.keys(snap.metrics).length > 0;
+        const hasCitations = Array.isArray(snap.citations) && snap.citations.length > 0;
+        const hasTelemetry = hasMetrics || hasCitations || snap.lifecycle === "streaming" || snap.lifecycle === "metrics" || snap.lifecycle === "done" || snap.lifecycle === "stopped";
+
+        if (snap.answer) {
+          answerEl.innerHTML = renderSafeMarkdown(snap.answer);
+        } else if (snap.lifecycle === "connecting") {
+          answerEl.classList.add("placeholder");
+          answerEl.textContent = t("arena_connecting");
+        } else if (snap.lifecycle === "stopped") {
+          answerEl.classList.add("placeholder");
+          answerEl.textContent = t("arena_stopped_note");
+        } else {
+          renderArenaEmptyContent(answerEl, spec.version);
+        }
+
+        if (snap.lifecycle === "idle" || !hasTelemetry) {
+          pillsEl.style.display = "none";
+          pillsEl.replaceChildren();
+        } else {
+          pillsEl.style.display = "flex";
+          pillsEl.innerHTML = buildCompactTelemetryHtml(
+            snap.metrics,
+            (snap.citations || []).length,
+            snap.lifecycle
+          );
+        }
 
         card.append(header, answerEl, pillsEl);
         card.addEventListener("click", (ev) => {
@@ -2569,21 +3279,30 @@
     }
 
     /* ============================================================================
-     * 6. View Mode Switching & Language Switching
+     * 7. Mode-Driven Action Bar, View Mode Switching & Language Switching (R1 + R4)
      * ============================================================================ */
-    function switchViewMode(mode) {
-      activeViewMode = mode === "playground" ? "playground" : "arena";
-      const isArena = activeViewMode === "arena";
-      viewModeArenaBtn.classList.toggle("active", isArena);
-      viewModePlaygroundBtn.classList.toggle("active", !isArena);
-      compareSection.style.display = isArena ? "flex" : "none";
-      playgroundSection.style.display = isArena ? "none" : "flex";
+    function syncPrimaryActionButton() {
+      document.querySelectorAll(".quick-pill-btn").forEach((btn) => {
+        btn.disabled = isGenerating;
+      });
+      playgroundPipeSelect.disabled = isGenerating;
+      viewModeArenaBtn.disabled = isGenerating;
+      viewModePlaygroundBtn.disabled = isGenerating;
 
-      if (!isArena) {
-        syncPlaygroundPipelineBadge();
-        selectInspectedPipeline(pipelineSelect.value);
+      if (isGenerating) {
+        sendBtn.disabled = false;
+        sendBtn.className = "stop-btn";
+        sendBtn.textContent = t("btn_stop_gen");
+        return;
+      }
+
+      sendBtn.disabled = false;
+      if (activeViewMode === "arena") {
+        sendBtn.className = "compare-btn";
+        sendBtn.textContent = t("btn_send_arena");
       } else {
-        selectInspectedPipeline(inspectedPipeline || "v3");
+        sendBtn.className = "";
+        sendBtn.textContent = t("btn_send_playground").replace("{ver}", pipelineSelect.value);
       }
     }
 
@@ -2596,6 +3315,50 @@
       };
       playgroundActivePipeBadge.className = `pipeline-badge ${v}`;
       playgroundActivePipeBadge.textContent = labels[v] || v;
+    }
+
+    function syncPipelineVersion(ver) {
+      if (!["v1", "v2", "v3"].includes(ver)) {
+        return;
+      }
+      pipelineSelect.value = ver;
+      playgroundPipeSelect.value = ver;
+      syncPlaygroundPipelineBadge();
+      syncPrimaryActionButton();
+      if (activeViewMode === "playground") {
+        selectInspectedPipeline(ver);
+      }
+    }
+
+    function switchViewMode(mode) {
+      activeViewMode = mode === "playground" ? "playground" : "arena";
+      const isArena = activeViewMode === "arena";
+      viewModeArenaBtn.classList.toggle("active", isArena);
+      viewModePlaygroundBtn.classList.toggle("active", !isArena);
+      compareSection.style.display = isArena ? "flex" : "none";
+      playgroundSection.style.display = isArena ? "none" : "flex";
+      playgroundPipeWrapper.style.display = isArena ? "none" : "flex";
+
+      if (!isArena) {
+        syncPlaygroundPipelineBadge();
+        selectInspectedPipeline(pipelineSelect.value);
+      } else {
+        selectInspectedPipeline(inspectedPipeline || "v3");
+      }
+      syncPrimaryActionButton();
+    }
+
+    function renderStoreChunksBadge() {
+      if (lastStoreStats && lastStoreStats.online) {
+        storeChunksText.textContent =
+          `📥 ${t("badge_online")} | Chunks: ${lastStoreStats.chunks} · ${t("badge_ingest_label")}`;
+        storeChunksBadge.className = "status-pill ingest-trigger-btn done";
+      } else {
+        const offlineChunks = lastStoreStats ? lastStoreStats.chunks : "--";
+        storeChunksText.textContent =
+          `📥 ${t("badge_offline")} | Chunks: ${offlineChunks} · ${t("badge_ingest_label")}`;
+        storeChunksBadge.className = "status-pill ingest-trigger-btn warn";
+      }
     }
 
     function applyLanguage(lang) {
@@ -2635,7 +3398,11 @@
         el.setAttribute("placeholder", t(key));
       });
 
-      // Update the 4 Interviewer Quick-Start Pills (both label AND prompt!)
+      document.querySelectorAll("[data-i18n-title]").forEach((el) => {
+        const key = el.getAttribute("data-i18n-title");
+        el.setAttribute("title", t(key));
+      });
+
       const pills = I18N_DICT[lang].quick_pills || [];
       document.querySelectorAll(".quick-pill-btn").forEach((btn) => {
         const idx = Number(btn.getAttribute("data-pill-index"));
@@ -2645,22 +3412,46 @@
         }
       });
 
-      // If a Quick-Start Pill was active in queryInput, sync queryInput to the new language prompt
       if (activePromptPillIndex !== null && pills[activePromptPillIndex]) {
         queryInput.value = pills[activePromptPillIndex].prompt;
       }
 
-      // Refresh Arena placeholder text if still waiting
       ["v1", "v2", "v3"].forEach((ver) => {
+        const snap = pipelineSnapshots[ver];
         const ansEl = document.getElementById(`arena-answer-${ver}`);
-        if (ansEl && ansEl.classList.contains("placeholder")) {
-          ansEl.textContent = t("arena_waiting");
+        const pillsEl = document.getElementById(`arena-pills-${ver}`);
+        if (ansEl && !snap.answer && snap.lifecycle === "idle") {
+          renderArenaEmptyContent(ansEl, ver);
+        } else if (ansEl && !snap.answer && snap.lifecycle === "stopped") {
+          ansEl.textContent = t("arena_stopped_note");
+        }
+        if (pillsEl && pillsEl.style.display !== "none") {
+          pillsEl.innerHTML = buildCompactTelemetryHtml(
+            snap.metrics,
+            (snap.citations || []).length,
+            snap.lifecycle
+          );
         }
       });
+
+      if (playgroundTelemetryPills.style.display !== "none") {
+        const activeSnap = pipelineSnapshots[pipelineSelect.value] || pipelineSnapshots.v3;
+        playgroundTelemetryPills.innerHTML = buildCompactTelemetryHtml(
+          activeSnap.metrics,
+          (activeSnap.citations || []).length,
+          activeSnap.lifecycle
+        );
+      }
+
+      setStatus(currentStatusKey, currentStatusKind);
+      setCompareSummaryStatus(currentCompareStatusKey, currentCompareStatusKind);
+      renderStoreChunksBadge();
+      updatePipelineTrace(inspectedPipeline);
+      syncPrimaryActionButton();
     }
 
     /* ============================================================================
-     * 7. Health Stats, Session Timeline, SSE & API Execution
+     * 8. Health Stats, Session Timeline, SSE & API Execution (with AbortController)
      * ============================================================================ */
     function showError(message) {
       errorBanner.textContent = message;
@@ -2672,6 +3463,8 @@
       errorBanner.style.display = "none";
       tokenOutput.textContent = "";
       tokenOutput.classList.remove("placeholder");
+      playgroundTelemetryPills.style.display = "none";
+      playgroundTelemetryPills.replaceChildren();
       citationsList.replaceChildren();
       metricsGrid.replaceChildren();
     }
@@ -2683,13 +3476,19 @@
           throw new Error(`HTTP ${resp.status}`);
         }
         const stats = await resp.json();
-        storeChunksBadge.textContent =
-          `🟢 Online | Chunks: ${stats.total_chunks_in_store} | Mode: ${stats.runtime_mode}`;
-        storeChunksBadge.className = "status-pill done";
+        lastStoreStats = {
+          online: true,
+          chunks: stats.total_chunks_in_store,
+          mode: stats.runtime_mode
+        };
       } catch {
-        storeChunksBadge.textContent = "🟠 Offline | Chunks: -- | Mode: offline";
-        storeChunksBadge.className = "status-pill warn";
+        lastStoreStats = {
+          online: false,
+          chunks: "--",
+          mode: "offline"
+        };
       }
+      renderStoreChunksBadge();
     }
 
     function renderTimeline() {
@@ -2712,7 +3511,7 @@
         header.className = "timeline-header";
 
         const left = document.createElement("span");
-        left.textContent = `#${turn.turnNumber} · ${turn.pipeline} · ${turn.sessionId}`;
+        left.textContent = `#${turn.turnNumber} · ${turn.pipeline}`;
 
         const cacheBadge = document.createElement("span");
         cacheBadge.className = turn.cacheHit ? "badge hit" : "badge miss";
@@ -2774,6 +3573,12 @@
           capture.onToken(capture.answer);
         } else {
           tokenOutput.innerHTML = renderSafeMarkdown(capture.answer);
+          playgroundTelemetryPills.style.display = "flex";
+          playgroundTelemetryPills.innerHTML = buildCompactTelemetryHtml(
+            pipelineSnapshots[ver].metrics,
+            capture.citations.length,
+            "streaming"
+          );
         }
       } else if (eventName === "citations") {
         capture.citations = payload.citations || [];
@@ -2781,6 +3586,12 @@
         if (capture.onCitations) {
           capture.onCitations(capture.citations);
         } else {
+          playgroundTelemetryPills.style.display = "flex";
+          playgroundTelemetryPills.innerHTML = buildCompactTelemetryHtml(
+            capture.metrics,
+            capture.citations.length,
+            pipelineSnapshots[ver].lifecycle
+          );
           renderCitations(capture.citations);
         }
       } else if (eventName === "metrics") {
@@ -2791,9 +3602,11 @@
           capture.onMetrics(capture.metrics);
         } else {
           renderMetrics(capture.metrics);
-          playgroundTelemetryPills.innerHTML = buildTelemetryPillsHtml(
+          playgroundTelemetryPills.style.display = "flex";
+          playgroundTelemetryPills.innerHTML = buildCompactTelemetryHtml(
             capture.metrics,
-            capture.citations.length
+            capture.citations.length,
+            "metrics"
           );
           updatePipelineTrace(ver);
         }
@@ -2802,25 +3615,42 @@
         if (capture.onDone) {
           capture.onDone(payload);
         } else {
-          setStatus(`done (${payload.pipeline_version || ver})`, "done");
+          playgroundTelemetryPills.style.display = "flex";
+          playgroundTelemetryPills.innerHTML = buildCompactTelemetryHtml(
+            capture.metrics,
+            capture.citations.length,
+            "done"
+          );
+          setStatus("status_completed", "done");
           updatePipelineTrace(ver);
         }
       } else if (eventName === "error") {
         capture.hadError = true;
         pipelineSnapshots[ver].lifecycle = "error";
-        setStatus("error", "error");
+        setStatus("status_error", "error");
         showError(`${payload.error_type || "Error"}: ${payload.error || "Unknown error"}`);
       }
     }
 
-    async function readSseStream(response, capture) {
+    async function readSseStream(response, capture, signal) {
       const reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
       let buffer = "";
 
       while (true) {
+        if (signal && signal.aborted) {
+          try {
+            await reader.cancel();
+          } catch {
+            // Ignore stream cancel errors
+          }
+          break;
+        }
         const { value, done } = await reader.read();
         if (done) {
+          break;
+        }
+        if (signal && signal.aborted) {
           break;
         }
         buffer += decoder.decode(value, { stream: true });
@@ -2851,17 +3681,47 @@
       }
     }
 
+    function stopActiveGeneration() {
+      if (activeAbortController) {
+        activeAbortController.abort();
+      }
+    }
+
+    function finalizeStoppedOutput(version, snap, answerEl, pillsEl) {
+      snap.lifecycle = "stopped";
+      if (snap.answer) {
+        answerEl.classList.remove("placeholder");
+        answerEl.innerHTML = renderSafeMarkdown(`${snap.answer}\n\n*${t("arena_stopped_note")}*`);
+        pillsEl.style.display = "flex";
+        pillsEl.innerHTML = buildCompactTelemetryHtml(
+          snap.metrics,
+          (snap.citations || []).length,
+          "stopped"
+        );
+      } else {
+        answerEl.classList.add("placeholder");
+        answerEl.textContent = t("arena_stopped_note");
+        pillsEl.style.display = "none";
+      }
+      if (inspectedPipeline === version) {
+        updatePipelineTrace(version);
+      }
+    }
+
     async function sendChatRequest() {
       const query = queryInput.value.trim();
       if (!query) {
-        showError("Please enter a query before sending.");
+        showError(t("err_empty_query"));
         return;
       }
 
+      const controller = new AbortController();
+      activeAbortController = controller;
+      isGenerating = true;
+      syncPrimaryActionButton();
+
       clearOutputs();
-      sendBtn.disabled = true;
-      compareAllBtn.disabled = true;
-      setStatus("streaming...", "running");
+      setStatus("status_streaming", "running");
 
       if (!sessionInput.value.trim()) {
         sessionInput.value = `sess-${Date.now().toString(36)}`;
@@ -2900,7 +3760,8 @@
             "Content-Type": "application/json",
             "Accept": streamCheckbox.checked ? "text/event-stream" : "application/json"
           },
-          body: JSON.stringify(body)
+          body: JSON.stringify(body),
+          signal: controller.signal
         });
 
         if (!response.ok) {
@@ -2910,9 +3771,19 @@
 
         const contentType = response.headers.get("content-type") || "";
         if (contentType.includes("text/event-stream") && response.body) {
-          await readSseStream(response, capture);
+          await readSseStream(response, capture, controller.signal);
+          if (controller.signal.aborted) {
+            finalizeStoppedOutput(
+              selectedVer,
+              pipelineSnapshots[selectedVer],
+              tokenOutput,
+              playgroundTelemetryPills
+            );
+            setStatus("status_stopped", "warn");
+            return;
+          }
           if (!statusPill.classList.contains("error")) {
-            setStatus("completed", "done");
+            setStatus("status_completed", "done");
           }
         } else {
           const data = await response.json();
@@ -2927,17 +3798,19 @@
             clientMs: null
           };
           tokenOutput.innerHTML = renderSafeMarkdown(capture.answer);
-          playgroundTelemetryPills.innerHTML = buildTelemetryPillsHtml(
+          playgroundTelemetryPills.style.display = "flex";
+          playgroundTelemetryPills.innerHTML = buildCompactTelemetryHtml(
             capture.metrics,
-            capture.citations.length
+            capture.citations.length,
+            "done"
           );
           renderCitations(capture.citations);
           renderMetrics(capture.metrics);
           updatePipelineTrace(selectedVer);
-          setStatus(`done (${data.pipeline_version || body.pipeline_version})`, "done");
+          setStatus("status_completed", "done");
         }
 
-        if (!capture.hadError) {
+        if (!capture.hadError && !controller.signal.aborted) {
           recordTurn({
             sessionId: activeSessionId,
             pipeline: body.pipeline_version,
@@ -2952,18 +3825,31 @@
           });
         }
       } catch (err) {
-        setStatus("error", "error");
+        if (isAbortError(err) || controller.signal.aborted) {
+          finalizeStoppedOutput(
+            selectedVer,
+            pipelineSnapshots[selectedVer],
+            tokenOutput,
+            playgroundTelemetryPills
+          );
+          setStatus("status_stopped", "warn");
+          return;
+        }
+        setStatus("status_error", "error");
         showError(err instanceof Error ? err.message : String(err));
       } finally {
-        sendBtn.disabled = false;
-        compareAllBtn.disabled = false;
+        if (activeAbortController === controller) {
+          activeAbortController = null;
+          isGenerating = false;
+          syncPrimaryActionButton();
+        }
       }
     }
 
     async function compareAllPipelines() {
       const query = queryInput.value.trim();
       if (!query) {
-        showError("Please enter a query before running v1/v2/v3 comparison.");
+        showError(t("err_empty_query"));
         return;
       }
 
@@ -2971,13 +3857,15 @@
         switchViewMode("arena");
       }
 
+      const controller = new AbortController();
+      activeAbortController = controller;
+      isGenerating = true;
+      syncPrimaryActionButton();
+
       errorBanner.textContent = "";
       errorBanner.style.display = "none";
-      sendBtn.disabled = true;
-      compareAllBtn.disabled = true;
-      setStatus("arena running...", "running");
-      compareSummaryPill.textContent = "running v1 / v2 / v3...";
-      compareSummaryPill.className = "status-pill running";
+      setStatus("status_running", "running");
+      setCompareSummaryStatus("status_arena_running", "running");
 
       const versions = ["v1", "v2", "v3"];
       if (!sessionInput.value.trim()) {
@@ -2986,7 +3874,6 @@
       const baseSession = sessionInput.value.trim();
       const useStream = streamCheckbox.checked;
 
-      // Reset snapshots and skeleton cards
       versions.forEach((v) => {
         pipelineSnapshots[v] = {
           lifecycle: "connecting",
@@ -2997,7 +3884,7 @@
         };
       });
       initArenaGridSkeleton();
-      selectInspectedPipeline("v3");
+      selectInspectedPipeline(inspectedPipeline || "v3");
 
       try {
         await Promise.all(
@@ -3005,97 +3892,145 @@
             const started = performance.now();
             const ansEl = document.getElementById(`arena-answer-${version}`);
             const pillsEl = document.getElementById(`arena-pills-${version}`);
-            ansEl.classList.remove("placeholder");
-            ansEl.textContent = "...";
 
-            const resp = await fetch(endpointInput.value.trim(), {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Accept": useStream ? "text/event-stream" : "application/json"
-              },
-              body: JSON.stringify({
-                query,
-                session_id: `${baseSession}-${version}`,
-                pipeline_version: version,
-                stream: useStream
-              })
-            });
+            try {
+              const resp = await fetch(endpointInput.value.trim(), {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Accept": useStream ? "text/event-stream" : "application/json"
+                },
+                body: JSON.stringify({
+                  query,
+                  session_id: `${baseSession}-${version}`,
+                  pipeline_version: version,
+                  stream: useStream
+                }),
+                signal: controller.signal
+              });
 
-            if (!resp.ok) {
-              const errText = await resp.text();
-              throw new Error(`[${version}] HTTP ${resp.status}: ${errText}`);
-            }
-
-            const contentType = resp.headers.get("content-type") || "";
-            if (useStream && contentType.includes("text/event-stream") && resp.body) {
-              const capture = {
-                pipelineVersion: version,
-                answer: "",
-                citations: [],
-                metrics: {},
-                hadError: false,
-                onToken(fullText) {
-                  ansEl.innerHTML = renderSafeMarkdown(fullText);
-                },
-                onCitations(cits) {
-                  pillsEl.innerHTML = buildTelemetryPillsHtml(
-                    pipelineSnapshots[version].metrics,
-                    cits.length
-                  );
-                  if (inspectedPipeline === version) {
-                    renderCitations(cits);
-                  }
-                },
-                onMetrics(m) {
-                  pillsEl.innerHTML = buildTelemetryPillsHtml(
-                    m,
-                    (pipelineSnapshots[version].citations || []).length
-                  );
-                  if (inspectedPipeline === version) {
-                    renderMetrics(m);
-                    updatePipelineTrace(version);
-                  }
-                },
-                onDone() {
-                  pipelineSnapshots[version].clientMs = (performance.now() - started).toFixed(1);
-                  if (inspectedPipeline === version) {
-                    updatePipelineTrace(version);
-                  }
-                }
-              };
-              await readSseStream(resp, capture);
-            } else {
-              const data = await resp.json();
-              const clientMs = (performance.now() - started).toFixed(1);
-              pipelineSnapshots[version] = {
-                lifecycle: "done",
-                answer: data.answer || "",
-                citations: data.citations || [],
-                metrics: data.metrics || {},
-                clientMs
-              };
-              ansEl.innerHTML = renderSafeMarkdown(data.answer || "");
-              pillsEl.innerHTML = buildTelemetryPillsHtml(
-                data.metrics || {},
-                (data.citations || []).length
-              );
-              if (inspectedPipeline === version) {
-                renderCitations(data.citations || []);
-                renderMetrics(data.metrics || {});
-                updatePipelineTrace(version);
+              if (!resp.ok) {
+                const errText = await resp.text();
+                throw new Error(`[${version}] HTTP ${resp.status}: ${errText}`);
               }
+
+              const contentType = resp.headers.get("content-type") || "";
+              if (useStream && contentType.includes("text/event-stream") && resp.body) {
+                const capture = {
+                  pipelineVersion: version,
+                  answer: "",
+                  citations: [],
+                  metrics: {},
+                  hadError: false,
+                  onToken(fullText) {
+                    ansEl.classList.remove("placeholder");
+                    ansEl.innerHTML = renderSafeMarkdown(fullText);
+                    pillsEl.style.display = "flex";
+                    pillsEl.innerHTML = buildCompactTelemetryHtml(
+                      pipelineSnapshots[version].metrics,
+                      (pipelineSnapshots[version].citations || []).length,
+                      "streaming"
+                    );
+                  },
+                  onCitations(cits) {
+                    pillsEl.style.display = "flex";
+                    pillsEl.innerHTML = buildCompactTelemetryHtml(
+                      pipelineSnapshots[version].metrics,
+                      cits.length,
+                      pipelineSnapshots[version].lifecycle
+                    );
+                    if (inspectedPipeline === version) {
+                      renderCitations(cits);
+                    }
+                  },
+                  onMetrics(m) {
+                    pillsEl.style.display = "flex";
+                    pillsEl.innerHTML = buildCompactTelemetryHtml(
+                      m,
+                      (pipelineSnapshots[version].citations || []).length,
+                      "metrics"
+                    );
+                    if (inspectedPipeline === version) {
+                      renderMetrics(m);
+                      updatePipelineTrace(version);
+                    }
+                  },
+                  onDone() {
+                    pipelineSnapshots[version].clientMs = (performance.now() - started).toFixed(1);
+                    pillsEl.style.display = "flex";
+                    pillsEl.innerHTML = buildCompactTelemetryHtml(
+                      pipelineSnapshots[version].metrics,
+                      (pipelineSnapshots[version].citations || []).length,
+                      "done"
+                    );
+                    if (inspectedPipeline === version) {
+                      updatePipelineTrace(version);
+                    }
+                  }
+                };
+                await readSseStream(resp, capture, controller.signal);
+              } else {
+                const data = await resp.json();
+                const clientMs = (performance.now() - started).toFixed(1);
+                pipelineSnapshots[version] = {
+                  lifecycle: "done",
+                  answer: data.answer || "",
+                  citations: data.citations || [],
+                  metrics: data.metrics || {},
+                  clientMs
+                };
+                ansEl.classList.remove("placeholder");
+                ansEl.innerHTML = renderSafeMarkdown(data.answer || "");
+                pillsEl.style.display = "flex";
+                pillsEl.innerHTML = buildCompactTelemetryHtml(
+                  data.metrics || {},
+                  (data.citations || []).length,
+                  "done"
+                );
+                if (inspectedPipeline === version) {
+                  renderCitations(data.citations || []);
+                  renderMetrics(data.metrics || {});
+                  updatePipelineTrace(version);
+                }
+              }
+            } catch (err) {
+              if (isAbortError(err) || controller.signal.aborted) {
+                const snap = pipelineSnapshots[version];
+                if (snap.lifecycle !== "done") {
+                  finalizeStoppedOutput(version, snap, ansEl, pillsEl);
+                }
+                return;
+              }
+              throw err;
             }
           })
         );
 
-        // Record v3 turn in session history and sync Playground view buffer
+        if (controller.signal.aborted) {
+          versions.forEach((v) => {
+            const snap = pipelineSnapshots[v];
+            if (snap.lifecycle !== "done") {
+              finalizeStoppedOutput(
+                v,
+                snap,
+                document.getElementById(`arena-answer-${v}`),
+                document.getElementById(`arena-pills-${v}`)
+              );
+            }
+          });
+          setCompareSummaryStatus("status_stopped", "warn");
+          setStatus("status_stopped", "warn");
+          return;
+        }
+
         const v3Snap = pipelineSnapshots.v3;
         tokenOutput.classList.remove("placeholder");
         tokenOutput.innerHTML = renderSafeMarkdown(v3Snap.answer || "");
-        playgroundTelemetryPills.innerHTML = buildTelemetryPillsHtml(
+        playgroundTelemetryPills.style.display = "flex";
+        playgroundTelemetryPills.innerHTML = buildCompactTelemetryHtml(
           v3Snap.metrics,
-          (v3Snap.citations || []).length
+          (v3Snap.citations || []).length,
+          v3Snap.lifecycle
         );
         selectInspectedPipeline(inspectedPipeline || "v3");
 
@@ -3112,17 +4047,35 @@
           citationsCount: (v3Snap.citations || []).length
         });
 
-        compareSummaryPill.textContent = "completed (v1 / v2 / v3)";
-        compareSummaryPill.className = "status-pill done";
-        setStatus("completed", "done");
+        setCompareSummaryStatus("status_completed", "done");
+        setStatus("status_completed", "done");
       } catch (err) {
-        compareSummaryPill.textContent = "error";
-        compareSummaryPill.className = "status-pill error";
-        setStatus("error", "error");
+        if (isAbortError(err) || controller.signal.aborted) {
+          setCompareSummaryStatus("status_stopped", "warn");
+          setStatus("status_stopped", "warn");
+          return;
+        }
+        setCompareSummaryStatus("status_error", "error");
+        setStatus("status_error", "error");
         showError(err instanceof Error ? err.message : String(err));
       } finally {
-        sendBtn.disabled = false;
-        compareAllBtn.disabled = false;
+        if (activeAbortController === controller) {
+          activeAbortController = null;
+          isGenerating = false;
+          syncPrimaryActionButton();
+        }
+      }
+    }
+
+    function handlePrimarySubmitOrStop() {
+      if (isGenerating) {
+        stopActiveGeneration();
+        return;
+      }
+      if (activeViewMode === "arena") {
+        compareAllPipelines();
+      } else {
+        sendChatRequest();
       }
     }
 
@@ -3131,13 +4084,13 @@
       const content = ingestContentInput.value.trim();
       if (!source || !content) {
         ingestStatus.style.display = "block";
-        ingestStatus.textContent = "Error: source and content must both be non-empty.";
+        ingestStatus.textContent = t("ingest_err_empty");
         return;
       }
 
       ingestBtn.disabled = true;
       ingestStatus.style.display = "block";
-      ingestStatus.textContent = "Ingesting document and updating hybrid index...";
+      ingestStatus.textContent = t("ingest_running");
 
       try {
         const resp = await fetch(`${resolveApiBase()}/documents/ingest`, {
@@ -3170,8 +4123,21 @@
     }
 
     /* ============================================================================
-     * 8. Event Listeners & Bootstrap Initialization
+     * 9. Event Listeners & Bootstrap Initialization
      * ============================================================================ */
+    toggleLeftSidebarBtn.addEventListener("click", toggleLeftSidebar);
+    storeChunksBadge.addEventListener("click", () => openDrawer(ingestDrawer));
+    openSettingsDrawerBtn.addEventListener("click", () => openDrawer(settingsDrawer));
+    closeIngestDrawerBtn.addEventListener("click", closeAllDrawers);
+    closeSettingsDrawerBtn.addEventListener("click", closeAllDrawers);
+    drawerBackdrop.addEventListener("click", closeAllDrawers);
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        closeAllDrawers();
+      }
+    });
+
     viewModeArenaBtn.addEventListener("click", () => switchViewMode("arena"));
     viewModePlaygroundBtn.addEventListener("click", () => switchViewMode("playground"));
 
@@ -3183,6 +4149,9 @@
 
     document.querySelectorAll(".quick-pill-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
+        if (isGenerating) {
+          return;
+        }
         const idx = Number(btn.getAttribute("data-pill-index"));
         const pills = (I18N_DICT[currentLang] || I18N_DICT.zh).quick_pills || [];
         if (pills[idx]) {
@@ -3228,12 +4197,8 @@
       }
     });
 
-    pipelineSelect.addEventListener("change", () => {
-      syncPlaygroundPipelineBadge();
-      if (activeViewMode === "playground") {
-        selectInspectedPipeline(pipelineSelect.value);
-      }
-    });
+    pipelineSelect.addEventListener("change", () => syncPipelineVersion(pipelineSelect.value));
+    playgroundPipeSelect.addEventListener("change", () => syncPipelineVersion(playgroundPipeSelect.value));
 
     newSessionBtn.addEventListener("click", () => {
       sessionInput.value = `sess-${Date.now().toString(36)}`;
@@ -3248,29 +4213,19 @@
 
     ingestBtn.addEventListener("click", ingestInlineDocument);
 
-    sendBtn.addEventListener("click", () => {
-      if (activeViewMode === "arena") {
-        compareAllPipelines();
-      } else {
-        sendChatRequest();
-      }
-    });
-
-    compareAllBtn.addEventListener("click", compareAllPipelines);
+    sendBtn.addEventListener("click", handlePrimarySubmitOrStop);
 
     queryInput.addEventListener("keydown", (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
-        if (activeViewMode === "arena") {
-          compareAllPipelines();
-        } else {
-          sendChatRequest();
-        }
+        event.preventDefault();
+        handlePrimarySubmitOrStop();
       }
     });
 
-    // Initialize Arena skeleton, apply persisted language, and poll document stats
+    // Initialize Arena skeleton, apply persisted language, sync action bar, and poll stats
     initArenaGridSkeleton();
     applyLanguage(currentLang);
+    switchViewMode("arena");
     refreshDocumentStats();
     setInterval(refreshDocumentStats, 30000);
   </script>
