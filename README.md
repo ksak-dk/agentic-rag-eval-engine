@@ -308,7 +308,8 @@ agentic-rag-eval-engine/
 │   ├── test_load_test.py           # 异步并发压测与 SLA 判定单测
 │   ├── test_ports_and_adapters.py  # 六边形端口契约与离线/启发式适配器单测
 │   ├── test_retrieval.py           # 分块器与混合检索协议桩单测
-│   └── test_semantic_cache.py      # Redis 8 语义缓存相似度与 Fail-Open 单测
+│   ├── test_semantic_cache.py      # Redis 8 语义缓存相似度与 Fail-Open 单测
+│   └── test_vertex_adapter.py      # Vertex AI 适配器路由与凭证校验单测
 ├── .dockerignore                   # 云端构建排除清单（保留 tests/sse_viewer.html 看板）
 ├── Dockerfile                      # 基于 astral-sh/uv 的多阶段轻量云原生镜像
 ├── docker-compose.yml              # Qdrant + Redis 8 (+ 可选 Langfuse/Postgres 16)
