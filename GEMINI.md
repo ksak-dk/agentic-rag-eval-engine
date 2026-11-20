@@ -133,7 +133,7 @@ Each module is accepted when:
 - **对话自适应分流（Conversational Autopilot）**：
   - **轻量任务**（问答、文档校对、或 `≤ 2` 个文件的明确小改）：直接执行改动；若涉及代码或测试，收尾自动运行 `/verify`。
   - **复杂 / 跨模块任务**（新特性、架构重构、新增模块、或预计修改 `> 2` 个文件）：自动进入下方 **6 阶段闭环**（`DEFINE -> PLAN -> BUILD/DEBUG -> VERIFY -> REVIEW -> SHIP`）。
-  - **双端协同模式**（用户显式调用 `/gemini-pair-dev` 或要求联合审查时触发）：基于 `bsk`（CLI + Skill）连接网页版 Gemini，配合 `.pair-state.md` 状态板、3 轮熔断（`bsk` 未启动/超时/额度耗尽自动降级本地自审）、`A+B` 防退化迁移与 `/verify` 验收（详细链路见 `.agent/workflows/gemini-pair-dev.md`）。
+  - **双端协同模式**（用户显式调用 `/gemini-pair-dev` 或要求联合审查时触发）：基于 `bsk`（CLI + Skill）连接网页版 Gemini，配合 `.pair-state.md` 状态板、动态锁定最高级可用模型（额度超 `85%` 降级轻量/自动模式，`bsk` 未启动/超时/额度耗尽自动降级本地自审）、3 轮熔断、`A+B` 防退化迁移与 `/verify` 验收（详细链路见 `.agent/workflows/gemini-pair-dev.md`）。
 
 - **6 阶段技能路由（`.agents/skills/`）**：
   1. **DEFINE**：使用 `@skills/spec-driven-development`，先扫描现有代码对齐边界（明确改什么、**不改什么**），自动生成或更新根目录 `UPDATE_SPEC.md`（已被 `.gitignore` 忽略，严禁提交到 Git）。
