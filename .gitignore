@@ -80,3 +80,5 @@ docker-compose.override.yml
 # --- Automated Session Handover & Temporary Specs (generated locally, NEVER commit) ---
 HANDOVER.md
 UPDATE_SPEC.md
+.pair-state.md
+.agent/skills/

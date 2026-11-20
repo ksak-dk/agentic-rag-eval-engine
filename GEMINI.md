@@ -128,15 +128,20 @@ Each module is accepted when:
 
 ## Agentic Workflow & Blast-Radius Gates
 
-本仓库采用 **6 阶段技能工作流（`.agents/skills/`）+ 项目专属验证门禁（`.agent/workflows/verify.md`）** 协同开发，所有代理必须遵守以下路由与安全限制：
+本仓库采用 **对话自动路由 + 6 阶段技能工作流（`.agents/skills/`）+ 项目专属验证门禁（`.agent/workflows/`）** 协同开发。用户无需手动输入斜杠命令或手写规约文件，只需在对话中自然提出需求，代理即自动完成闭环并输出最终结果：
+
+- **对话自适应分流（Conversational Autopilot）**：
+  - **轻量任务**（问答、文档校对、或 `≤ 2` 个文件的明确小改）：直接执行改动；若涉及代码或测试，收尾自动运行 `/verify`。
+  - **复杂 / 跨模块任务**（新特性、架构重构、新增模块、或预计修改 `> 2` 个文件）：自动进入下方 **6 阶段闭环**（`DEFINE -> PLAN -> BUILD/DEBUG -> VERIFY -> REVIEW -> SHIP`）。
+  - **双端协同模式**（用户显式调用 `/gemini-pair-dev` 或要求联合审查时触发）：基于 `bsk`（CLI + Skill）连接网页版 Gemini，配合 `.pair-state.md` 状态板、3 轮熔断（`bsk` 未启动/超时/额度耗尽自动降级本地自审）、`A+B` 防退化迁移与 `/verify` 验收（详细链路见 `.agent/workflows/gemini-pair-dev.md`）。
 
 - **6 阶段技能路由（`.agents/skills/`）**：
-  1. **DEFINE**：使用 `@skills/spec-driven-development`，先扫描现有代码对齐边界（明确改什么、**不改什么**），将确认后的变更规约写入根目录 `UPDATE_SPEC.md`（已被 `.gitignore` 忽略，严禁提交到 Git）。
-  2. **PLAN**：使用 `@skills/planning-and-task-breakdown`（配合 `/plan`），读取 `UPDATE_SPEC.md` 拆解为 2～5 分钟可验证的原子步骤；**必须暂停等待人工确认计划后再开始写代码**（除非用户在指令中显式声明自动放行）。
-  3. **BUILD / DEBUG**：核心逻辑变更遵循 `@skills/test-driven-development`；遇到报错或回归故障时切换至 `@skills/debugging-and-error-recovery`，严格按复现 → 定位 → 修复 → 验证执行，严禁盲猜打补丁。
-  4. **VERIFY**：执行项目专属 `/verify`（`.agent/workflows/verify.md`），在前台非沙箱环境（允许 `127.0.0.1` 回环通信、严格遵守 Section 0 零成本离线模式）实跑 `uv run ruff check .`、`uv run ruff format --check .`、`uv run pytest -v`，附上真实退出码与结果摘要。
-  5. **REVIEW & CLEANUP**：提交前使用 `@skills/code-review-and-quality` 与 `@skills/code-simplification` 检查 `git diff`，清除过度设计与无关改动。
-  6. **SHIP**：按 Section 5 规范提交，并按 Section 8 立即覆盖更新根目录 `HANDOVER.md`。
+  1. **DEFINE**：使用 `@skills/spec-driven-development`，先扫描现有代码对齐边界（明确改什么、**不改什么**），自动生成或更新根目录 `UPDATE_SPEC.md`（已被 `.gitignore` 忽略，严禁提交到 Git）。
+  2. **PLAN**：使用 `@skills/planning-and-task-breakdown`（配合 `/plan` 规则），读取 `UPDATE_SPEC.md` 拆解为 2～5 分钟可验证的原子步骤；**若未触发下方爆炸半径门禁且无重大需求歧义，则自动放行（`auto_approve: true`）直接进入编码**；仅当触发爆炸半径门禁或存在高风险歧义时才暂停等待人工确认。
+  3. **BUILD / DEBUG**：核心逻辑变更遵循 `@skills/test-driven-development`；遇到报错或回归故障时自动切换至 `@skills/debugging-and-error-recovery`（`/debug`），严格按 `Reproduce -> Isolate -> Fix -> Verify` 自愈修复，严禁盲猜打补丁。
+  4. **VERIFY**：执行项目专属 `/verify`（`.agent/workflows/verify.md`），在前台非沙箱环境（`BypassSandbox: true` 允许 `127.0.0.1` 回环通信，严格遵守 Section 0 零成本离线模式）实跑 `uv run ruff check .`、`uv run ruff format --check .`、`uv run pytest -v`，附上真实退出码与结果摘要。
+  5. **REVIEW & CLEANUP**：收尾前使用 `@skills/code-review-and-quality` 与 `@skills/code-simplification` 检查 `git --no-pager diff`，清除过度设计与无关改动。
+  6. **SHIP**：默认汇报改动摘要与验证结果由用户决定是否提交；若执行 `git commit`，则严格按 Section 5 与 Section 8 规范提交并立即覆盖更新根目录 `HANDOVER.md`。
 
 - **外科手术式修改原则（Existing Codebase Guardrail）**：
   - 仅修改与当前 `UPDATE_SPEC.md` 直接相关的文件与代码行，**严禁顺手重构、重命名或格式化无关的历史代码**。

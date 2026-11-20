@@ -1,5 +1,5 @@
 ---
-description: 规约驱动的计划工作流（/plan）：生成原子级 Implementation Plan Artifact；当存在有效 UPDATE_SPEC.md 时自动放行（auto_approve: true）并直接编码与 /verify 验收。
+description: 规约驱动的计划工作流（/plan）：无论对话直接触发还是显式调用，均自动对齐或落盘 UPDATE_SPEC.md，生成原子级 Implementation Plan Artifact；未命中爆炸半径门禁时自动放行（auto_approve: true）并衔接编码与 /verify 验收。
 auto_approve: true
 ---
 
@@ -7,20 +7,21 @@ auto_approve: true
 
 ## 触发场景
 - 用户输入 `/plan`。
-- 任何开发新特性、架构重构、新增模块，或预计修改超过 **2 个文件** 的任务。
+- **对话自动路由触发**：用户在自然语言对话中提出任何新特性、架构重构、新增模块，或预计修改超过 **2 个文件** 的开发任务（无需用户手动输入 `/plan` 或预写 `UPDATE_SPEC.md`）。
 
 ## 强制执行规则
 
-### Step 0: 内联规约自动落盘 (Inline Spec Auto-Save)
-- 在开始任何分析或检索前，先检查本次用户输入的 `/plan` 消息中是否包含 `--- SPEC START ---` 分隔符：
-  - **如果包含**：立即将 `--- SPEC START ---` 之后的全部内容原样提取并写入（或覆盖）项目根目录的 `UPDATE_SPEC.md`（已被 `.gitignore` 忽略，严禁提交到 Git），然后再基于该文件制定计划。
-  - **如果不包含**：按原逻辑直接读取项目根目录已有的 `UPDATE_SPEC.md`；若该文件不存在，则直接根据用户简述制定计划。
+### Step 0: 规约自动对齐与落盘 (Spec Auto-Resolve & Auto-Save)
+- 检查用户输入与本地状态，按以下优先级获取或生成根目录 `UPDATE_SPEC.md`（已被 `.gitignore` 忽略，严禁提交到 Git）：
+  1. **包含 `--- SPEC START ---`**：将 `--- SPEC START ---` 之后的全部内容原样提取并覆盖写入 `UPDATE_SPEC.md`。
+  2. **本地已有与当前任务匹配的 `UPDATE_SPEC.md`**：直接读取并作为规约基准。
+  3. **纯自然语言对话发起（无现成 `UPDATE_SPEC.md`）**：若需求意图明确，Agent 必须先扫描相关代码对齐接口边界（明确改什么、**不改什么**），自动起草并落盘一份精炼的 `UPDATE_SPEC.md`，随后直接进入规划与实现；仅当核心需求存在重大歧义且无法安全推断时，才向用户提问澄清。
 
 ### 后续规划与门禁规则
 
 1. **全自动放行与规划门禁（Autonomous Execution Policy）**
-   - 当根目录存在有效 `UPDATE_SPEC.md`（或本次 `/plan` 已提取 `--- SPEC START ---` 落盘为 `UPDATE_SPEC.md`）且未触发下方爆炸半径门禁时：**自动将生成的 `Implementation Plan` Artifact 视作已批准（`auto_approve: true`）**，生成计划后**无需暂停等待人工确认**，立即进入编码实现、`/verify` 门禁测试与 `HANDOVER.md` 更新。
-   - 仅当不存在有效 `UPDATE_SPEC.md` 或触发爆炸半径拦截门禁时，才在生成 `Implementation Plan` 后暂停并请求人工确认，严禁绕过确认直接修改高风险配置文件。
+   - 当已完成 `UPDATE_SPEC.md` 对齐（含 Step 0 自动落盘）且**未触发下方爆炸半径门禁**时：**自动将生成的 `Implementation Plan` Artifact 视作已批准（`auto_approve: true`）**，生成计划后**无需暂停等待人工确认**，立即进入编码实现（遵循 TDD）、`/verify` 门禁测试与收尾汇报。
+   - **仅当触发爆炸半径拦截门禁**，或存在高风险/重大架构歧义时，才在生成 `Implementation Plan` 后暂停并请求人工确认，严禁绕过确认直接修改高风险配置或公共契约。
 
 2. **对照本地规约与硬件约束**
    - 完整读取根目录 `UPDATE_SPEC.md`（若存在）中的架构约束、模块边界、状态字段与接口契约。
@@ -39,12 +40,12 @@ auto_approve: true
      - 修改 `pyproject.toml` 新增/升级/移除第三方依赖；
      - 更改 `/api/v1/` 公共接口签名或响应契约；
      - 修改数据库 Schema、SQLite Checkpoint 结构或执行数据清理；
-     - 调整或破坏原有 56 项 `pytest` 单测断言；
+     - 调整或破坏原有 65 项 `pytest` 单测断言；
      - 修改 `.github/workflows/` CI/CD 或发版配置。
 
 5. **自动放行执行与编码后 `/verify` 衔接**
-   - 若存在有效 `UPDATE_SPEC.md` 且未命中爆炸半径门禁，生成 `Implementation Plan` Artifact（`RequestFeedback: false`）后立即按计划编码，随后自动执行 `/verify`（注意在允许 `127.0.0.1` 回环通信的前台非沙箱终端运行 `pytest`）并按 `GEMINI.md` Section 8 更新 `HANDOVER.md`。
-   - 若无有效 `UPDATE_SPEC.md` 或命中爆炸半径门禁，则在生成 `Implementation Plan` Artifact 后停下并指出关键决策点与风险，等待 Approve 后再编码。
+   - 若已完成 `UPDATE_SPEC.md` 对齐（含自动落盘）且未命中爆炸半径门禁，生成 `Implementation Plan` Artifact（`RequestFeedback: false`）后立即按计划编码，随后自动执行 `/verify`（注意在允许 `127.0.0.1` 回环通信的前台非沙箱终端运行 `pytest`）并按需更新 `HANDOVER.md`。
+   - 若命中爆炸半径门禁或存在无法自动消歧的高风险决策，则在生成 `Implementation Plan` Artifact 后停下并指出关键决策点与风险，等待 Approve 后再编码。
 
 6. **全局语言规范 (Language Policy)**
    - 所有面向用户的自然语言输出（包括 `Implementation Plan`、`Task` 清单、`Walkthrough`、代码审查说明及日常对话）必须默认使用**简体中文**。
